@@ -140,6 +140,7 @@ export function useMyRole(): 'clue-giver' | 'taboo-master' | 'taboo-watcher' | '
   const phase = useGameStore(s => s.phase);
   const cluingTeam = useGameStore(s => s.cluingTeam);
   const tabooMasters = useGameStore(s => s.tabooMasters);
+  const activeCGId = useGameStore(s => s.activeCluingClueGiverId);
 
   const me = players.find(p => p.id === playerId);
   if (!me?.team) return null;
@@ -149,8 +150,6 @@ export function useMyRole(): 'clue-giver' | 'taboo-master' | 'taboo-watcher' | '
   }
 
   if (!cluingTeam) return null;
-
-  const activeCGId = useGameStore(s => s.activeCluingClueGiverId);
 
   if (me.team === cluingTeam) {
     return me.id === activeCGId ? 'clue-giver' : 'guesser';
