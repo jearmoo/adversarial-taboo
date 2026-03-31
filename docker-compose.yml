@@ -1,0 +1,10 @@
+services:
+  taboo:
+    build: .
+    container_name: adversarial-taboo
+    restart: unless-stopped
+    ports:
+      - "4040:4040"
+    environment:
+      - NODE_ENV=production
+      - PORT=4040
