@@ -47,9 +47,9 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const rooms = new RoomManager();
+rooms.setSnapshotPath(ROOMS_PATH);
 registerHandlers(io, rooms);
 
-// Restore rooms saved from previous shutdown
 rooms.restore(ROOMS_PATH, (room, team) => handleTurnEnd(room, team, io));
 
 function shutdown() {
@@ -62,6 +62,20 @@ function shutdown() {
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
+
+process.on('uncaughtException', (err) => {
+  logger.error('server', 'Uncaught exception, saving state before exit', { error: String(err) });
+  rooms.save(ROOMS_PATH);
+  metrics.destroy();
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('server', 'Unhandled rejection, saving state before exit', { error: String(reason) });
+  rooms.save(ROOMS_PATH);
+  metrics.destroy();
+  process.exit(1);
+});
 
 io.engine.on('connection_error', (err: any) => {
   logger.error('server', 'Socket.IO connection error', { code: err.code, message: err.message });

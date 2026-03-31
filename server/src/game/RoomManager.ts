@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, existsSync, unlinkSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync, unlinkSync, renameSync } from 'fs';
 import { Room } from './Room';
 import { GamePhase, TeamId } from './types';
 import { logger } from '../logger';
@@ -11,9 +11,25 @@ export class RoomManager {
   private rooms: Map<string, Room> = new Map();
   private playerToRoom: Map<string, string> = new Map();
   private cleanupInterval: ReturnType<typeof setInterval>;
+  private snapshotInterval: ReturnType<typeof setInterval>;
+  private snapshotPath: string | null = null;
 
   constructor() {
     this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
+    this.snapshotInterval = setInterval(() => this.snapshot(), 60_000);
+  }
+
+  setSnapshotPath(path: string): void {
+    this.snapshotPath = path;
+  }
+
+  private snapshot(): void {
+    if (!this.snapshotPath) return;
+    if (this.rooms.size > 0) {
+      this.save(this.snapshotPath);
+    } else if (existsSync(this.snapshotPath)) {
+      try { unlinkSync(this.snapshotPath); } catch {}
+    }
   }
 
   private generateCode(): string {
@@ -83,7 +99,9 @@ export class RoomManager {
   save(filePath: string): void {
     const data = Array.from(this.rooms.values()).map(r => r.toJSON());
     try {
-      writeFileSync(filePath, JSON.stringify(data, null, 2));
+      const tmp = filePath + '.tmp';
+      writeFileSync(tmp, JSON.stringify(data, null, 2));
+      renameSync(tmp, filePath);
       logger.info('rooms', 'Saved room state to disk', { rooms: data.length });
     } catch (err) {
       logger.error('rooms', 'Failed to save room state', { error: String(err) });
@@ -94,46 +112,51 @@ export class RoomManager {
     filePath: string,
     onTimerExpired: (room: Room, team: 'A' | 'B') => void,
   ): void {
-    try {
-      if (!existsSync(filePath)) return;
-      const raw = readFileSync(filePath, 'utf-8');
-      const entries = JSON.parse(raw);
-      if (!Array.isArray(entries)) return;
+    // Try main file first, fall back to .tmp if corrupt
+    for (const candidate of [filePath, filePath + '.tmp']) {
+      try {
+        if (!existsSync(candidate)) continue;
+        const raw = readFileSync(candidate, 'utf-8');
+        const entries = JSON.parse(raw);
+        if (!Array.isArray(entries)) continue;
 
-      for (const entry of entries) {
-        const room = Room.fromJSON(entry);
-        this.rooms.set(room.code, room);
+        for (const entry of entries) {
+          const room = Room.fromJSON(entry);
+          this.rooms.set(room.code, room);
 
-        // Rebuild playerToRoom
-        for (const [pid] of room.players) {
-          this.playerToRoom.set(pid, room.code);
-        }
+          for (const [pid] of room.players) {
+            this.playerToRoom.set(pid, room.code);
+          }
 
-        // Restore active timers
-        const cluingTeam = room.getCluingTeam();
-        if (cluingTeam && room.game?.timerEnd) {
-          const remaining = room.game.timerEnd - Date.now();
-          if (remaining > 0) {
-            room.restoreTimer(remaining, () => onTimerExpired(room, cluingTeam));
-          } else {
-            // Timer expired during downtime — end the turn immediately
-            onTimerExpired(room, cluingTeam);
+          const cluingTeam = room.getCluingTeam();
+          if (cluingTeam && room.game?.timerEnd) {
+            const remaining = room.game.timerEnd - Date.now();
+            if (remaining > 0) {
+              room.restoreTimer(remaining, () => onTimerExpired(room, cluingTeam));
+            } else {
+              onTimerExpired(room, cluingTeam);
+            }
           }
         }
+
+        logger.info('rooms', 'Restored room state from disk', {
+          source: candidate,
+          rooms: entries.length,
+          players: this.playerToRoom.size,
+        });
+
+        // Clean up both files after successful restore
+        try { unlinkSync(filePath); } catch {}
+        try { unlinkSync(filePath + '.tmp'); } catch {}
+        return;
+      } catch (err) {
+        logger.error('rooms', 'Failed to restore from file', { file: candidate, error: String(err) });
       }
-
-      logger.info('rooms', 'Restored room state from disk', {
-        rooms: entries.length,
-        players: this.playerToRoom.size,
-      });
-
-      unlinkSync(filePath);
-    } catch (err) {
-      logger.error('rooms', 'Failed to restore room state', { error: String(err) });
     }
   }
 
   destroy(): void {
     clearInterval(this.cleanupInterval);
+    clearInterval(this.snapshotInterval);
   }
 }
