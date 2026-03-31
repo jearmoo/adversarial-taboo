@@ -8,7 +8,7 @@ import { logger } from './logger';
 import { metrics } from './metrics';
 
 const PORT = parseInt(process.env.PORT || '4040', 10);
-const METRICS_TOKEN = process.env.METRICS_TOKEN || 'REDACTED_TOKEN';
+const METRICS_TOKEN = process.env.METRICS_TOKEN;
 const app = express();
 const httpServer = createServer(app);
 

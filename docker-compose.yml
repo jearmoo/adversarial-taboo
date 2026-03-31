@@ -1,6 +1,7 @@
 services:
   taboo:
     build: .
+    env_file: .env
     container_name: adversarial-taboo
     restart: unless-stopped
     ports:
