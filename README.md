@@ -28,12 +28,14 @@ A real-time multiplayer party game where teams take turns giving clues while the
 - **Help button** (?) — Available on every screen, explains the game and roles
 - **Round history** (clock icon) — Review completed rounds: words clued, taboo words, buzzes, and score breakdowns per team
 - **Reconnection** — Players who disconnect can rejoin with the same name; game state is fully restored
+- **Host & TM resilience** — Both host and Taboo Master are immediately reassigned if a player disconnects
 - **Taboo Master reassignment** — Can be changed mid-game via the expandable roster in the score bar
 
 ## Tech Stack
 
 - **Frontend**: React 18 + Vite + Zustand + Tailwind CSS
 - **Backend**: Node.js + Express + Socket.IO
+- **Word Source**: randomwordgenerator.com (pluggable provider interface)
 - **Deployment**: Docker
 
 ## Development
@@ -82,6 +84,11 @@ adversarial-taboo/
 │       │   ├── types.ts       # Shared type definitions
 │       │   ├── Room.ts        # Room state machine, game logic, round archiving
 │       │   └── RoomManager.ts # Room lifecycle management
+│       ├── words/
+│       │   ├── WordProvider.ts    # Provider interface + fallback word list wrapper
+│       │   ├── charades.ts        # randomwordgenerator.com provider (active)
+│       │   ├── randomWordApi.ts   # random-word-api.herokuapp.com (reference)
+│       │   └── index.ts          # Configured export (charades, difficulty 3)
 │       └── socket/
 │           ├── handlers.ts    # Socket.IO handler orchestrator
 │           ├── context.ts     # Shared handler context + reconnect state builder
