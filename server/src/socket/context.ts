@@ -10,26 +10,33 @@ export interface SocketContext {
   setPlayerId: (id: string | null) => void;
 }
 
-export function getRoom(ctx: SocketContext): Room | undefined {
-  const pid = ctx.getPlayerId();
-  if (!pid) return undefined;
-  return ctx.rooms.getRoomForPlayer(pid);
-}
-
 export function buildGameState(room: Room) {
   if (!room.game) return null;
   return {
     phase: room.game.phase,
     round: room.game.round,
     scores: room.game.scores,
-    turn: {
-      activeTeam: room.game.turn.activeTeam,
-      clueGiverId: room.game.turn.clueGiverId,
-      timerEnd: room.game.turn.timerEnd,
-      cards: room.game.turn.cards,
-      tabooWords: room.game.turn.tabooWords,
-      tabooSuggestions: room.game.turn.tabooSuggestions,
-      tabooBuzzes: room.game.turn.tabooBuzzes,
+    challenges: {
+      A: {
+        cards: room.game.challenges.A.cards,
+        tabooWords: room.game.challenges.A.tabooWords,
+        tabooSuggestions: room.game.challenges.A.tabooSuggestions,
+        tabooBuzzes: room.game.challenges.A.tabooBuzzes,
+        ready: room.game.challenges.A.ready,
+        clueGiverId: room.game.challenges.A.clueGiverId,
+      },
+      B: {
+        cards: room.game.challenges.B.cards,
+        tabooWords: room.game.challenges.B.tabooWords,
+        tabooSuggestions: room.game.challenges.B.tabooSuggestions,
+        tabooBuzzes: room.game.challenges.B.tabooBuzzes,
+        ready: room.game.challenges.B.ready,
+        clueGiverId: room.game.challenges.B.clueGiverId,
+      },
     },
+    timerEnd: room.game.timerEnd,
+    tabooMasters: room.game.tabooMasters,
+    turnResults: room.game.turnResults,
+    roundHistory: room.getRoundHistory(),
   };
 }

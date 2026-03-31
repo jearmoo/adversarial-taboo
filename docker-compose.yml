@@ -8,3 +8,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4040
+      - LOG_LEVEL=info
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

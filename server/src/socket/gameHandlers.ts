@@ -1,159 +1,65 @@
 import { GamePhase } from '../game/types';
 import { SocketContext } from './context';
+import { logger } from '../logger';
+import { prepareCluingPhase } from './setupHandlers';
+import { emitSetupCards } from './lobbyHandlers';
+
+function handleTurnEnd(room: any, team: 'A' | 'B', io: any) {
+  const result = room.endCluing();
+  logger.info('game', 'Cluing ended', { room: room.code, team, turnScore: result.turnScore });
+
+  if (result.nextPhase === GamePhase.CLUING_B) {
+    io.to(room.code).emit('turn:transition', { phase: GamePhase.CLUING_B, turnScore: result.turnScore, scores: room.game.scores });
+    prepareCluingPhase(room, 'B', io);
+  } else {
+    io.to(room.code).emit('round:ended', {
+      phase: result.nextPhase, scores: room.game.scores,
+      round: room.game.round, turnResults: room.game.turnResults,
+      roundHistory: room.getRoundHistory(),
+    });
+  }
+}
 
 export function registerGameHandlers(ctx: SocketContext) {
   const { io, socket, rooms } = ctx;
 
-  socket.on('round:pick-clue-giver', async ({ clueGiverId: cgId }: { clueGiverId: string }) => {
+  // Clue-giver presses "Begin Cluing" — starts the timer
+  socket.on('clue:begin', () => {
     const playerId = ctx.getPlayerId();
     if (!playerId) return;
     const room = rooms.getRoomForPlayer(playerId);
-    if (!room?.game || room.game.phase !== GamePhase.ROUND_SETUP) return;
+    if (!room?.game) return;
+    const cluingTeam = room.getCluingTeam();
+    if (!cluingTeam) return;
+    const challenge = room.getActiveChallenge();
+    if (!challenge || playerId !== challenge.clueGiverId) return;
+    if (room.game.timerEnd !== null) return; // already started
 
-    const activeTeam = room.game.turn.activeTeam;
-    const activeTeamTM = room.ensureTabooMaster(activeTeam);
-    if (playerId !== activeTeamTM) {
-      socket.emit('room:error', { message: 'Only your team\'s taboo master can pick the clue-giver' });
-      return;
-    }
-
-    if (!room.setClueGiver(cgId)) {
-      socket.emit('room:error', { message: 'Invalid clue-giver selection' });
-      return;
-    }
-
-    const opposingTeam = room.getOpposingTeam(activeTeam);
-    const opposingTM = room.getTabooMasterForOpposing();
-
-    io.to(room.code).emit('round:clue-giver-set', {
-      clueGiverId: cgId, tabooMasterId: opposingTM, phase: GamePhase.TABOO_INPUT,
-    });
-
-    const cards = await room.fetchAndSetWords();
-    const opposingPlayers = room.getTeamPlayers(opposingTeam);
-    for (const p of opposingPlayers) {
-      io.to(p.socketId).emit('round:cards', {
-        cards: cards.map(c => ({ word: c.word, result: c.result })),
-      });
-    }
-  });
-
-  socket.on('taboo:refresh-word', async ({ cardIndex }: { cardIndex: number }) => {
-    const playerId = ctx.getPlayerId();
-    if (!playerId) return;
-    const room = rooms.getRoomForPlayer(playerId);
-    if (!room?.game || room.game.phase !== GamePhase.TABOO_INPUT) return;
-    if (playerId !== room.getTabooMasterForOpposing()) return;
-
-    const newWord = await room.refreshWord(cardIndex);
-    if (!newWord) return;
-
-    const opposingTeam = room.getOpposingTeam(room.game.turn.activeTeam);
-    const opposingPlayers = room.getTeamPlayers(opposingTeam);
-    for (const p of opposingPlayers) {
-      io.to(p.socketId).emit('round:cards', {
-        cards: room.game.turn.cards.map(c => ({ word: c.word, result: c.result })),
-      });
-    }
-  });
-
-  socket.on('taboo:suggest', ({ word }: { word: string }) => {
-    const playerId = ctx.getPlayerId();
-    if (!playerId) return;
-    const room = rooms.getRoomForPlayer(playerId);
-    if (!room?.game || room.game.phase !== GamePhase.TABOO_INPUT) return;
-    const player = room.getPlayer(playerId);
-    if (!player || player.team === room.game.turn.activeTeam) return;
-
-    const suggestions = room.suggestTabooWord(word);
-    const opposingTeam = room.getOpposingTeam(room.game.turn.activeTeam);
-    for (const p of room.getTeamPlayers(opposingTeam)) {
-      io.to(p.socketId).emit('taboo:words-updated', { words: suggestions });
-    }
-  });
-
-  socket.on('taboo:remove', ({ word }: { word: string }) => {
-    const playerId = ctx.getPlayerId();
-    if (!playerId) return;
-    const room = rooms.getRoomForPlayer(playerId);
-    if (!room?.game || room.game.phase !== GamePhase.TABOO_INPUT) return;
-    if (playerId !== room.getTabooMasterForOpposing()) return;
-
-    const suggestions = room.removeTabooWord(word);
-    const opposingTeam = room.getOpposingTeam(room.game.turn.activeTeam);
-    for (const p of room.getTeamPlayers(opposingTeam)) {
-      io.to(p.socketId).emit('taboo:words-updated', { words: suggestions });
-    }
-  });
-
-  socket.on('taboo:confirm', () => {
-    const playerId = ctx.getPlayerId();
-    if (!playerId) return;
-    const room = rooms.getRoomForPlayer(playerId);
-    if (!room?.game || room.game.phase !== GamePhase.TABOO_INPUT) return;
-    if (playerId !== room.getTabooMasterForOpposing()) return;
-
-    if (!room.confirmTabooWords()) {
-      socket.emit('room:error', { message: 'Need at least 1 taboo word' });
-      return;
-    }
-
-    const timerEnd = room.startTimer(() => {
-      const result = room.endTurn();
-      io.to(room.code).emit('turn:ended', {
-        phase: result.nextPhase, scores: room.game!.scores,
-        round: room.game!.round, nextActiveTeam: result.nextActiveTeam, turnScore: result.turnScore,
-      });
-    });
-
-    const activeTeam = room.game.turn.activeTeam;
-    const opposingTeam = room.getOpposingTeam(activeTeam);
-
-    const clueGiver = room.getPlayer(room.game.turn.clueGiverId!);
-    if (clueGiver) {
-      io.to(clueGiver.socketId).emit('clue:start', {
-        timerEnd, phase: GamePhase.CLUING,
-        cards: room.game.turn.cards.map(c => ({ word: c.word, result: c.result })),
-        tabooWords: [], tabooBuzzes: {},
-      });
-    }
-
-    for (const p of room.getTeamPlayers(activeTeam).filter(p => p.id !== room.game!.turn.clueGiverId)) {
-      io.to(p.socketId).emit('clue:start', {
-        timerEnd, phase: GamePhase.CLUING,
-        cards: room.game.turn.cards.map(c => ({ word: '???', result: c.result })),
-        tabooWords: [], tabooBuzzes: {},
-      });
-    }
-
-    for (const p of room.getTeamPlayers(opposingTeam)) {
-      io.to(p.socketId).emit('clue:start', {
-        timerEnd, phase: GamePhase.CLUING,
-        cards: room.game.turn.cards.map(c => ({ word: c.word, result: c.result })),
-        tabooWords: room.game.turn.tabooWords, tabooBuzzes: room.game.turn.tabooBuzzes,
-      });
-    }
+    const timerEnd = room.beginCluingTimer(() => handleTurnEnd(room, cluingTeam, io));
+    logger.info('game', 'Clue-giver began cluing', { room: room.code, team: cluingTeam });
+    io.to(room.code).emit('clue:timer-started', { timerEnd });
   });
 
   socket.on('clue:got-it', ({ cardIndex }: { cardIndex: number }) => {
     const playerId = ctx.getPlayerId();
     if (!playerId) return;
     const room = rooms.getRoomForPlayer(playerId);
-    if (!room?.game || room.game.phase !== GamePhase.CLUING) return;
-    if (playerId !== room.game.turn.clueGiverId) return;
+    if (!room?.game) return;
+    const cluingTeam = room.getCluingTeam();
+    if (!cluingTeam) return;
+    const challenge = room.getActiveChallenge();
+    if (!challenge || playerId !== challenge.clueGiverId) return;
 
     if (!room.resolveCard(cardIndex)) return;
-    const card = room.game.turn.cards[cardIndex];
+    const card = challenge.cards[cardIndex];
+    logger.info('game', 'Card resolved', { room: room.code, team: cluingTeam, word: card.word });
+
     io.to(room.code).emit('clue:card-resolved', {
       cardIndex, word: card.word, result: 'correct', scores: room.game.scores,
     });
 
     if (room.allCardsResolved()) {
-      const result = room.endTurn();
-      io.to(room.code).emit('turn:ended', {
-        phase: result.nextPhase, scores: room.game!.scores,
-        round: room.game!.round, nextActiveTeam: result.nextActiveTeam, turnScore: result.turnScore,
-      });
+      handleTurnEnd(room, cluingTeam, io);
     }
   });
 
@@ -161,23 +67,45 @@ export function registerGameHandlers(ctx: SocketContext) {
     const playerId = ctx.getPlayerId();
     if (!playerId) return;
     const room = rooms.getRoomForPlayer(playerId);
-    if (!room?.game || room.game.phase !== GamePhase.CLUING) return;
-    if (playerId !== room.game.turn.clueGiverId) return;
+    if (!room?.game) return;
+    const challenge = room.getActiveChallenge();
+    if (!challenge || playerId !== challenge.clueGiverId) return;
     if (!room.undoCard(cardIndex)) return;
+    logger.info('game', 'Card undone', { room: room.code, word: challenge.cards[cardIndex].word });
     io.to(room.code).emit('clue:card-undone', { cardIndex, scores: room.game.scores });
+  });
+
+  socket.on('clue:end-turn', () => {
+    const playerId = ctx.getPlayerId();
+    if (!playerId) return;
+    const room = rooms.getRoomForPlayer(playerId);
+    if (!room?.game) return;
+    const cluingTeam = room.getCluingTeam();
+    if (!cluingTeam) return;
+    const challenge = room.getActiveChallenge();
+    if (!challenge || playerId !== challenge.clueGiverId) return;
+    if (room.game.timerEnd === null) return; // timer not started yet
+    logger.info('game', 'Clue-giver ended turn early', { room: room.code, team: cluingTeam });
+    handleTurnEnd(room, cluingTeam, io);
   });
 
   socket.on('taboo:buzz', ({ tabooWord }: { tabooWord: string }) => {
     const playerId = ctx.getPlayerId();
     if (!playerId) return;
     const room = rooms.getRoomForPlayer(playerId);
-    if (!room?.game || room.game.phase !== GamePhase.CLUING) return;
-    if (playerId !== room.getTabooMasterForOpposing()) return;
+    if (!room?.game) return;
+    const cluingTeam = room.getCluingTeam();
+    if (!cluingTeam) return;
+    // Only opposing TM can buzz
+    const opposingTeam = room.getOpposingTeam(cluingTeam);
+    if (playerId !== room.tabooMasters[opposingTeam]) return;
 
     const count = room.buzzTabooWord(tabooWord);
     if (count === 0) return;
+    logger.info('game', 'Taboo buzz', { room: room.code, tabooWord, count });
     io.to(room.code).emit('taboo:buzzed', {
-      tabooWord, count, scores: room.game.scores, tabooBuzzes: room.game.turn.tabooBuzzes,
+      tabooWord, count, scores: room.game.scores,
+      tabooBuzzes: room.game.challenges[cluingTeam].tabooBuzzes,
     });
   });
 
@@ -185,12 +113,17 @@ export function registerGameHandlers(ctx: SocketContext) {
     const playerId = ctx.getPlayerId();
     if (!playerId) return;
     const room = rooms.getRoomForPlayer(playerId);
-    if (!room?.game || room.game.phase !== GamePhase.CLUING) return;
-    if (playerId !== room.getTabooMasterForOpposing()) return;
+    if (!room?.game) return;
+    const cluingTeam = room.getCluingTeam();
+    if (!cluingTeam) return;
+    const opposingTeam = room.getOpposingTeam(cluingTeam);
+    if (playerId !== room.tabooMasters[opposingTeam]) return;
 
     const count = room.undoBuzzTabooWord(tabooWord);
+    logger.info('game', 'Taboo undo-buzz', { room: room.code, tabooWord, count });
     io.to(room.code).emit('taboo:unbuzzed', {
-      tabooWord, count, scores: room.game.scores, tabooBuzzes: room.game.turn.tabooBuzzes,
+      tabooWord, count, scores: room.game.scores,
+      tabooBuzzes: room.game.challenges[cluingTeam].tabooBuzzes,
     });
   });
 
@@ -198,14 +131,29 @@ export function registerGameHandlers(ctx: SocketContext) {
     const playerId = ctx.getPlayerId();
     if (!playerId) return;
     const room = rooms.getRoomForPlayer(playerId);
-    if (!room?.game) return;
+    if (!room?.game || room.game.phase !== GamePhase.ROUND_RESULT) return;
+    if (room.hostId !== playerId) return;
+
     room.ensureTabooMaster('A');
     room.ensureTabooMaster('B');
-    room.advanceFromTurnResult();
-    io.to(room.code).emit('round:setup', {
-      phase: room.game.phase, round: room.game.round,
-      activeTeam: room.game.turn.activeTeam, scores: room.game.scores,
+    room.advanceToNextRound();
+
+    logger.info('game', 'Next round', { room: room.code, round: room.game.round });
+
+    // Immediately transition UI (empty cards = loading state)
+    io.to(room.code).emit('setup:started', {
+      phase: GamePhase.PARALLEL_SETUP, round: room.game.round, scores: room.game.scores,
+      challengeCards: [],
       tabooMasters: room.tabooMasters,
+    });
+
+    // Fetch words async, then send cards
+    room.fetchInitialWords().then(() => {
+      if (!room.game) return;
+      emitSetupCards(room, io);
+      io.to(room.code).emit('setup:status', room.getSetupStatus());
+    }).catch(e => {
+      logger.error('game', 'Failed to fetch words for next round', { room: room.code, error: String(e) });
     });
   });
 
@@ -214,6 +162,8 @@ export function registerGameHandlers(ctx: SocketContext) {
     if (!playerId) return;
     const room = rooms.getRoomForPlayer(playerId);
     if (!room) return;
+    if (room.hostId !== playerId) return;
+    logger.info('game', 'Play again', { room: room.code });
     room.resetToLobby();
     io.to(room.code).emit('game:reset', { room: room.toDTO() });
   });

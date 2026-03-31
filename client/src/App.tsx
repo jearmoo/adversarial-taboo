@@ -1,15 +1,14 @@
 import { useGameStore, useMyRole } from './store';
 import HomeScreen from './components/HomeScreen';
 import LobbyScreen from './components/LobbyScreen';
-import RoundSetupScreen from './components/RoundSetupScreen';
-import TabooInputScreen from './components/TabooInputScreen';
+import ParallelSetupScreen from './components/ParallelSetupScreen';
 import ClueGiverScreen from './components/ClueGiverScreen';
-import ClueGiverWaitScreen from './components/ClueGiverWaitScreen';
 import GuesserScreen from './components/GuesserScreen';
 import TabooWatcherScreen from './components/TabooWatcherScreen';
 import ScoringScreen from './components/ScoringScreen';
 import GameOverScreen from './components/GameOverScreen';
 import ScoreBoard from './components/ScoreBoard';
+import { HelpButton } from './components/HelpModal';
 
 export default function App() {
   const phase = useGameStore(s => s.phase);
@@ -23,11 +22,23 @@ export default function App() {
     );
   }
 
-  if (!phase) return <HomeScreen />;
+  if (!phase) return (
+    <>
+      <HomeScreen />
+      <div className="fixed top-3 right-3 z-40">
+        <HelpButton className="w-7 h-7 flex items-center justify-center rounded-full glass-card border border-white/10 text-xs text-gray-400 hover:text-accent transition-colors font-semibold" />
+      </div>
+    </>
+  );
 
   return (
     <div className="h-full flex flex-col">
-      {phase !== 'LOBBY' && phase !== 'GAME_OVER' && <ScoreBoard />}
+      {phase === 'LOBBY' && (
+        <div className="fixed top-3 right-3 z-40">
+          <HelpButton className="w-7 h-7 flex items-center justify-center rounded-full glass-card border border-white/10 text-xs text-gray-400 hover:text-accent transition-colors font-semibold" />
+        </div>
+      )}
+      {phase !== 'LOBBY' && <ScoreBoard />}
       <div className="flex-1 min-h-0 overflow-auto">
         <ScreenRouter phase={phase} />
       </div>
@@ -41,18 +52,15 @@ function ScreenRouter({ phase }: { phase: string }) {
   switch (phase) {
     case 'LOBBY':
       return <LobbyScreen />;
-    case 'ROUND_SETUP':
-      return <RoundSetupScreen />;
-    case 'TABOO_INPUT':
-      if (role === 'clue-giver') return <ClueGiverWaitScreen />;
-      if (role === 'guesser') return <GuesserScreen />;
-      return <TabooInputScreen />;
-    case 'CLUING':
+    case 'PARALLEL_SETUP':
+      return <ParallelSetupScreen />;
+    case 'CLUING_A':
+    case 'CLUING_B':
       if (role === 'clue-giver') return <ClueGiverScreen />;
       if (role === 'guesser') return <GuesserScreen />;
       if (role === 'taboo-master') return <TabooWatcherScreen isMaster />;
       return <TabooWatcherScreen isMaster={false} />;
-    case 'TURN_RESULT':
+    case 'ROUND_RESULT':
       return <ScoringScreen />;
     case 'GAME_OVER':
       return <GameOverScreen />;

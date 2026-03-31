@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useGameStore, useIsHost, useMyPlayer } from '../store';
 import { socket } from '../socket';
 
@@ -13,6 +14,9 @@ export default function LobbyScreen() {
   const teamB = players.filter(p => p.team === 'B');
   const unassigned = players.filter(p => !p.team);
   const canStart = teamA.length >= 2 && teamB.length >= 2 && !!tabooMasters.A && !!tabooMasters.B;
+
+  const [timerInput, setTimerInput] = useState(String(settings.timerSeconds));
+  useEffect(() => { setTimerInput(String(settings.timerSeconds)); }, [settings.timerSeconds]);
 
   const shareUrl = `${window.location.origin}/${roomCode}`;
 
@@ -63,10 +67,17 @@ export default function LobbyScreen() {
           </label>
           <label className="flex items-center justify-between text-gray-400">
             <span className="text-gray-500">Timer (s)</span>
-            <input type="number" min={10} max={600} value={settings.timerSeconds}
-              onChange={e => {
-                const v = parseInt(e.target.value);
-                if (v > 0) socket.emit('settings:update', { timerSeconds: v });
+            <input type="number" min={10} max={600} value={timerInput}
+              onChange={e => setTimerInput(e.target.value)}
+              onBlur={() => {
+                const v = parseInt(timerInput);
+                if (v && v > 0) {
+                  const clamped = Math.max(10, Math.min(600, v));
+                  socket.emit('settings:update', { timerSeconds: clamped });
+                  setTimerInput(String(clamped));
+                } else {
+                  setTimerInput(String(settings.timerSeconds));
+                }
               }}
               className="bg-surface-raised text-white rounded-lg px-2 py-1 border border-white/5 text-sm w-16 text-center" />
           </label>

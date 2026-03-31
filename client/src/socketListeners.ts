@@ -45,13 +45,55 @@ socket.on('room:rejoined', ({ roomCode, playerId, room, game }) => {
     update.phase = game.phase;
     update.round = game.round;
     update.scores = game.scores;
-    update.activeTeam = game.turn.activeTeam;
-    update.clueGiverId = game.turn.clueGiverId;
-    update.timerEnd = game.turn.timerEnd;
-    update.cards = game.turn.cards || [];
-    update.tabooWords = game.turn.tabooWords || [];
-    update.tabooSuggestions = game.turn.tabooSuggestions || [];
-    update.tabooBuzzes = game.turn.tabooBuzzes || {};
+    update.timerEnd = game.timerEnd;
+    update.turnResults = game.turnResults;
+    if (game.roundHistory) update.roundHistory = game.roundHistory;
+
+    const me = room.players.find((p: any) => p.id === playerId);
+    const myTeam = me?.team as 'A' | 'B' | null;
+
+    if (myTeam && game.phase === 'PARALLEL_SETUP') {
+      // During setup, my team creates challenge FOR the opposing team
+      const opposingTeam = myTeam === 'A' ? 'B' : 'A';
+      const challengeForOpposing = game.challenges[opposingTeam];
+      const challengeForMyTeam = game.challenges[myTeam];
+
+      update.challengeCards = challengeForOpposing.cards.map((c: any) => ({ word: c.word, result: c.result }));
+      update.tabooSuggestions = challengeForOpposing.tabooSuggestions;
+      update.ownClueGiverId = challengeForMyTeam.clueGiverId;
+      update.setupStatus = {
+        A: {
+          ready: game.challenges.A.ready,
+          tabooCount: game.challenges.A.tabooSuggestions.length,
+          hasClueGiver: !!game.challenges.A.clueGiverId,
+        },
+        B: {
+          ready: game.challenges.B.ready,
+          tabooCount: game.challenges.B.tabooSuggestions.length,
+          hasClueGiver: !!game.challenges.B.clueGiverId,
+        },
+      };
+    }
+
+    if (myTeam && (game.phase === 'CLUING_A' || game.phase === 'CLUING_B')) {
+      const cluingTeam = game.phase === 'CLUING_A' ? 'A' : 'B';
+      const challenge = game.challenges[cluingTeam];
+      update.cluingTeam = cluingTeam;
+      update.activeCluingClueGiverId = challenge.clueGiverId;
+      update.tabooBuzzes = challenge.tabooBuzzes;
+
+      if (myTeam === cluingTeam) {
+        const isClueGiver = playerId === challenge.clueGiverId;
+        update.cards = challenge.cards.map((c: any) => ({
+          word: isClueGiver ? c.word : '???',
+          result: c.result,
+        }));
+        update.tabooWords = [];
+      } else {
+        update.cards = challenge.cards.map((c: any) => ({ word: c.word, result: c.result }));
+        update.tabooWords = challenge.tabooWords;
+      }
+    }
   }
   useGameStore.setState(update);
   saveSession();
@@ -62,54 +104,67 @@ socket.on('room:rejoined', ({ roomCode, playerId, room, game }) => {
 socket.on('room:player-joined', ({ player }) => {
   useGameStore.setState(s => ({ players: [...s.players, player] }));
 });
-
 socket.on('room:player-left', ({ hostId, players }) => {
   useGameStore.setState({ players, hostId });
 });
-
 socket.on('room:player-disconnected', ({ playerId: pid }) => {
   useGameStore.setState(s => ({
     players: s.players.map(p => p.id === pid ? { ...p, connected: false } : p),
   }));
 });
-
 socket.on('room:player-reconnected', ({ playerId: pid }) => {
   useGameStore.setState(s => ({
     players: s.players.map(p => p.id === pid ? { ...p, connected: true } : p),
   }));
 });
 
-// Lobby updates
+// Lobby
 socket.on('team:updated', ({ players }) => { useGameStore.setState({ players }); });
 socket.on('settings:updated', ({ settings }) => { useGameStore.setState({ settings }); });
 socket.on('taboo-master:updated', ({ tabooMasters }) => { useGameStore.setState({ tabooMasters }); });
 socket.on('room:error', ({ message }) => { console.error('Room error:', message); });
 
-// Game flow
-socket.on('game:started', ({ phase, round, activeTeam, scores, tabooMasters }) => {
+// --- Parallel Setup ---
+socket.on('setup:started', ({ phase, round, scores, challengeCards, tabooMasters }) => {
   useGameStore.setState({
-    phase, round, activeTeam, scores, tabooMasters,
-    cards: [], tabooWords: [], tabooSuggestions: [], tabooBuzzes: {},
-    clueGiverId: null, tabooMasterId: null,
-    timerEnd: null, turnScore: null,
+    phase, round, scores, tabooMasters,
+    challengeCards,
+    tabooSuggestions: [],
+    ownClueGiverId: null,
+    setupStatus: { A: { ready: false, tabooCount: 0, hasClueGiver: false }, B: { ready: false, tabooCount: 0, hasClueGiver: false } },
+    cards: [], tabooWords: [], tabooBuzzes: {},
+    timerEnd: null, cluingTeam: null, activeCluingClueGiverId: null,
+    turnResults: { A: null, B: null },
   });
 });
 
-socket.on('round:clue-giver-set', ({ clueGiverId, tabooMasterId, phase }) => {
-  useGameStore.setState({ clueGiverId, tabooMasterId, phase, cards: [] });
+socket.on('setup:status', (status) => {
+  useGameStore.setState({ setupStatus: status });
 });
 
-socket.on('round:cards', ({ cards }) => {
-  useGameStore.setState({ cards });
+socket.on('setup:clue-giver-set', ({ team, clueGiverId }) => {
+  const me = useGameStore.getState();
+  const myTeam = me.players.find(p => p.id === me.playerId)?.team;
+  if (myTeam === team) {
+    useGameStore.setState({ ownClueGiverId: clueGiverId });
+  }
 });
 
-socket.on('taboo:words-updated', ({ words }) => {
+socket.on('setup:taboo-updated', ({ forTeam, words }) => {
   useGameStore.setState({ tabooSuggestions: words });
 });
 
-// Cluing phase
-socket.on('clue:start', ({ timerEnd, phase, cards, tabooWords, tabooBuzzes }) => {
-  useGameStore.setState({ timerEnd, phase, cards, tabooWords, tabooBuzzes });
+socket.on('setup:cards-updated', ({ forTeam, cards }) => {
+  useGameStore.setState({ challengeCards: cards });
+});
+
+// --- Cluing ---
+socket.on('clue:start', ({ clueGiverId, timerEnd, phase, team, cards, tabooWords, tabooBuzzes }) => {
+  useGameStore.setState({ activeCluingClueGiverId: clueGiverId, timerEnd, phase, cluingTeam: team, cards, tabooWords, tabooBuzzes });
+});
+
+socket.on('clue:timer-started', ({ timerEnd }) => {
+  useGameStore.setState({ timerEnd });
 });
 
 socket.on('clue:card-resolved', ({ cardIndex, word, result, scores }) => {
@@ -131,23 +186,25 @@ socket.on('clue:card-undone', ({ cardIndex, scores }) => {
 socket.on('taboo:buzzed', ({ scores, tabooBuzzes }) => {
   useGameStore.setState({ scores, tabooBuzzes });
 });
-
 socket.on('taboo:unbuzzed', ({ scores, tabooBuzzes }) => {
   useGameStore.setState({ scores, tabooBuzzes });
 });
 
-// Turn/round transitions
-socket.on('turn:ended', ({ phase, scores, round, nextActiveTeam, turnScore }) => {
-  useGameStore.setState({ phase, scores, round, nextActiveTeam, turnScore, timerEnd: null });
+// --- Transitions ---
+socket.on('turn:transition', ({ phase, turnScore, scores }) => {
+  // Team A just finished, about to start Team B
+  useGameStore.setState(s => ({
+    phase, scores,
+    turnResults: { ...s.turnResults, A: turnScore },
+    cards: [], tabooWords: [], tabooBuzzes: {}, timerEnd: null,
+  }));
 });
 
-socket.on('round:setup', ({ phase, round, activeTeam, scores, tabooMasters }) => {
-  if (tabooMasters) useGameStore.setState({ tabooMasters });
+socket.on('round:ended', ({ phase, scores, round, turnResults, roundHistory }) => {
   useGameStore.setState({
-    phase, round, activeTeam, scores,
-    cards: [], tabooWords: [], tabooSuggestions: [], tabooBuzzes: {},
-    clueGiverId: null, tabooMasterId: null,
-    timerEnd: null, turnScore: null,
+    phase, scores, round, turnResults,
+    timerEnd: null, cluingTeam: null, activeCluingClueGiverId: null,
+    ...(roundHistory ? { roundHistory } : {}),
   });
 });
 
@@ -157,11 +214,9 @@ socket.on('game:reset', ({ room }) => {
     connected: true,
     playerId: useGameStore.getState().playerId,
     playerName: useGameStore.getState().playerName,
-    roomCode: room.code,
-    hostId: room.hostId,
-    players: room.players,
-    settings: room.settings,
-    tabooMasters: room.tabooMasters,
-    phase: 'LOBBY',
+    roomCode: room.code, hostId: room.hostId,
+    players: room.players, settings: room.settings,
+    tabooMasters: room.tabooMasters, phase: 'LOBBY',
+    roundHistory: [],
   });
 });

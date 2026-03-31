@@ -8,11 +8,24 @@ export default function TabooWatcherScreen({ isMaster }: { isMaster: boolean }) 
   const tabooBuzzes = useGameStore(s => s.tabooBuzzes);
   const timerEnd = useGameStore(s => s.timerEnd);
   const scores = useGameStore(s => s.scores);
-  const activeTeam = useGameStore(s => s.activeTeam);
+  const cluingTeam = useGameStore(s => s.cluingTeam);
 
   const totalBuzzes = Object.values(tabooBuzzes).reduce((sum, c) => sum + c, 0);
   const correctCount = cards.filter(c => c.result === 'correct').length;
   const liveScore = correctCount * 3 - totalBuzzes;
+
+  if (!timerEnd) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6 gap-6 animate-fade-in">
+        <div className="glass-card rounded-2xl p-6 border border-white/5 max-w-xs text-center">
+          <div className="font-display text-xl text-white tracking-wider mb-2">
+            Team {cluingTeam}'s Turn
+          </div>
+          <div className="text-gray-500 text-sm">Waiting for clue-giver to begin...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col p-4 gap-3 animate-fade-in">

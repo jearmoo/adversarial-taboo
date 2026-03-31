@@ -11,37 +11,37 @@ export type TeamId = 'A' | 'B';
 
 export enum GamePhase {
   LOBBY = 'LOBBY',
-  ROUND_SETUP = 'ROUND_SETUP',
-  TABOO_INPUT = 'TABOO_INPUT',
-  CLUING = 'CLUING',
-  TURN_RESULT = 'TURN_RESULT',
+  PARALLEL_SETUP = 'PARALLEL_SETUP',
+  CLUING_A = 'CLUING_A',
+  CLUING_B = 'CLUING_B',
+  ROUND_RESULT = 'ROUND_RESULT',
   GAME_OVER = 'GAME_OVER',
 }
 
 export interface WordCard {
   word: string;
-  result: 'correct' | null; // null = pending
+  result: 'correct' | null;
 }
 
 export interface TabooBuzzes {
-  [tabooWord: string]: number; // buzz count per taboo word
+  [tabooWord: string]: number;
 }
 
-export interface TurnState {
-  activeTeam: TeamId;
-  clueGiverId: string | null;
+// Challenge created BY one team FOR the other team to clue
+export interface ChallengeSetup {
   cards: WordCard[];
-  tabooWords: string[];         // finalized taboo words (up to 20)
-  tabooSuggestions: string[];   // during input phase
-  tabooBuzzes: TabooBuzzes;     // per-taboo-word buzz counts
-  timerEnd: number | null;
+  tabooWords: string[];         // locked-in taboo words
+  tabooSuggestions: string[];   // during setup
+  tabooBuzzes: TabooBuzzes;     // during cluing
+  ready: boolean;               // creating TM locked in
+  clueGiverId: string | null;   // target team's chosen clue-giver
 }
 
 export interface TurnScoreData {
   correct: number;
   missed: number;
   buzzes: number;
-  points: number; // correct * 3 - buzzes
+  points: number;
 }
 
 export interface RoomSettings {
@@ -54,11 +54,27 @@ export interface RoomSettings {
 export interface GameState {
   phase: GamePhase;
   round: number;
-  turnInRound: number;
-  firstTeam: TeamId;
   scores: { A: number; B: number };
-  turn: TurnState;
+  // challenges[X] = challenge FOR team X (created BY opposing TM)
+  challenges: { A: ChallengeSetup; B: ChallengeSetup };
+  timerEnd: number | null;
   tabooMasters: { A: string | null; B: string | null };
+  turnResults: { A: TurnScoreData | null; B: TurnScoreData | null };
+}
+
+
+export interface TeamRoundData {
+  cards: WordCard[];
+  tabooWords: string[];
+  tabooBuzzes: TabooBuzzes;
+  turnScore: TurnScoreData;
+  clueGiverName: string;
+  tabooMasterName: string;
+}
+
+export interface RoundArchiveEntry {
+  round: number;
+  teams: { A: TeamRoundData; B: TeamRoundData };
 }
 
 export interface PlayerDTO {

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type GamePhase = 'LOBBY' | 'ROUND_SETUP' | 'TABOO_INPUT' | 'CLUING' | 'TURN_RESULT' | 'GAME_OVER';
+export type GamePhase = 'LOBBY' | 'PARALLEL_SETUP' | 'CLUING_A' | 'CLUING_B' | 'ROUND_RESULT' | 'GAME_OVER';
 export type TeamId = 'A' | 'B';
 
 export interface Player {
@@ -26,6 +26,25 @@ export interface TurnScore {
   points: number;
 }
 
+export interface SetupStatus {
+  A: { ready: boolean; tabooCount: number; hasClueGiver: boolean };
+  B: { ready: boolean; tabooCount: number; hasClueGiver: boolean };
+}
+
+export interface TeamRoundData {
+  cards: WordCard[];
+  tabooWords: string[];
+  tabooBuzzes: TabooBuzzes;
+  turnScore: TurnScore;
+  clueGiverName: string;
+  tabooMasterName: string;
+}
+
+export interface RoundArchiveEntry {
+  round: number;
+  teams: { A: TeamRoundData; B: TeamRoundData };
+}
+
 export interface GameStore {
   connected: boolean;
   playerId: string | null;
@@ -39,19 +58,27 @@ export interface GameStore {
 
   phase: GamePhase | null;
   round: number;
-  activeTeam: TeamId | null;
   scores: { A: number; B: number };
-  clueGiverId: string | null;
-  tabooMasterId: string | null;
 
-  cards: WordCard[];
+  // Parallel setup
+  challengeCards: WordCard[];     // cards this team's TM is setting up (for opposing team)
+  tabooSuggestions: string[];     // taboo words being added
+  ownClueGiverId: string | null;  // own team's clue-giver
+  setupStatus: SetupStatus;
+
+  // Cluing phase
+  cluingTeam: TeamId | null;
+  activeCluingClueGiverId: string | null;  // server-provided clue-giver ID for current cluing phase
+  cards: WordCard[];              // active cluing cards
   tabooWords: string[];
-  tabooSuggestions: string[];
   tabooBuzzes: TabooBuzzes;
-
   timerEnd: number | null;
-  turnScore: TurnScore | null;
-  nextActiveTeam: TeamId | null;
+
+  // Results
+  turnResults: { A: TurnScore | null; B: TurnScore | null };
+
+  // History
+  roundHistory: RoundArchiveEntry[];
 
   setPlayerName: (name: string) => void;
   reset: () => void;
@@ -68,17 +95,19 @@ export const initialState = {
   tabooMasters: { A: null, B: null },
   phase: null,
   round: 1,
-  activeTeam: null,
   scores: { A: 0, B: 0 },
-  clueGiverId: null,
-  tabooMasterId: null,
+  challengeCards: [],
+  tabooSuggestions: [],
+  ownClueGiverId: null,
+  setupStatus: { A: { ready: false, tabooCount: 0, hasClueGiver: false }, B: { ready: false, tabooCount: 0, hasClueGiver: false } },
+  cluingTeam: null,
+  activeCluingClueGiverId: null,
   cards: [],
   tabooWords: [],
-  tabooSuggestions: [],
   tabooBuzzes: {},
   timerEnd: null,
-  turnScore: null,
-  nextActiveTeam: null,
+  turnResults: { A: null, B: null },
+  roundHistory: [],
 };
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -98,17 +127,26 @@ export function useMyPlayer(): Player | undefined {
 export function useMyRole(): 'clue-giver' | 'taboo-master' | 'taboo-watcher' | 'guesser' | null {
   const playerId = useGameStore(s => s.playerId);
   const players = useGameStore(s => s.players);
-  const activeTeam = useGameStore(s => s.activeTeam);
-  const clueGiverId = useGameStore(s => s.clueGiverId);
-  const tabooMasterId = useGameStore(s => s.tabooMasterId);
+  const phase = useGameStore(s => s.phase);
+  const cluingTeam = useGameStore(s => s.cluingTeam);
+  const tabooMasters = useGameStore(s => s.tabooMasters);
 
   const me = players.find(p => p.id === playerId);
-  if (!me?.team || !activeTeam) return null;
+  if (!me?.team) return null;
 
-  if (me.team === activeTeam) {
-    return me.id === clueGiverId ? 'clue-giver' : 'guesser';
+  if (phase === 'PARALLEL_SETUP') {
+    return me.id === tabooMasters[me.team] ? 'taboo-master' : 'taboo-watcher';
+  }
+
+  if (!cluingTeam) return null;
+  const opposingTeam = cluingTeam === 'A' ? 'B' : 'A';
+
+  const activeCGId = useGameStore.getState().activeCluingClueGiverId;
+
+  if (me.team === cluingTeam) {
+    return me.id === activeCGId ? 'clue-giver' : 'guesser';
   } else {
-    return me.id === tabooMasterId ? 'taboo-master' : 'taboo-watcher';
+    return me.id === tabooMasters[me.team] ? 'taboo-master' : 'taboo-watcher';
   }
 }
 

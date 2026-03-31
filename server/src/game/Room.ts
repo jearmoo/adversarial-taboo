@@ -1,8 +1,9 @@
 import {
   Player, GameState, GamePhase, TeamId,
-  RoomSettings, TurnState, WordCard, TabooBuzzes,
-  TurnScoreData, PlayerDTO, RoomDTO,
+  RoomSettings, WordCard, ChallengeSetup, TabooBuzzes,
+  TurnScoreData, TeamRoundData, RoundArchiveEntry, PlayerDTO, RoomDTO,
 } from './types';
+import { logger } from '../logger';
 
 const WORD_API = 'http://random-word-api.herokuapp.com/word';
 
@@ -13,11 +14,66 @@ async function fetchWords(count: number): Promise<string[]> {
     const words = (await res.json()) as string[];
     return words.map(w => w.toLowerCase());
   } catch (e) {
-    const fallback = ['elephant', 'pizza', 'library', 'guitar', 'volcano',
-      'astronaut', 'butterfly', 'chocolate', 'fireworks', 'telescope'];
+    const fallback = [
+      // Animals
+      'elephant', 'penguin', 'giraffe', 'dolphin', 'kangaroo', 'octopus', 'parrot',
+      'chameleon', 'flamingo', 'cheetah', 'hedgehog', 'gorilla', 'seahorse', 'peacock',
+      'hamster', 'lobster', 'raccoon', 'jellyfish', 'buffalo', 'porcupine', 'toucan',
+      'armadillo', 'koala', 'walrus', 'panther', 'scorpion', 'iguana', 'pelican',
+      // Food & Drink
+      'pizza', 'chocolate', 'pancake', 'spaghetti', 'avocado', 'croissant', 'burrito',
+      'pretzel', 'sushi', 'popcorn', 'marshmallow', 'cinnamon', 'hamburger', 'pineapple',
+      'milkshake', 'lasagna', 'cucumber', 'watermelon', 'gingerbread', 'cheesecake',
+      'broccoli', 'espresso', 'guacamole', 'muffin', 'coconut', 'lemonade', 'dumpling',
+      // Objects & Things
+      'guitar', 'telescope', 'umbrella', 'chandelier', 'trampoline', 'compass', 'hammock',
+      'typewriter', 'kaleidoscope', 'binoculars', 'skateboard', 'accordion', 'lantern',
+      'boomerang', 'parachute', 'megaphone', 'snowglobe', 'hourglass', 'toolbox',
+      'briefcase', 'backpack', 'thermometer', 'microscope', 'saxophone', 'wheelchair',
+      'dishwasher', 'stethoscope', 'trident', 'catapult', 'periscope', 'scarecrow',
+      // Places & Buildings
+      'library', 'volcano', 'lighthouse', 'pyramid', 'treehouse', 'aquarium', 'cathedral',
+      'igloo', 'skyscraper', 'casino', 'fountain', 'dungeon', 'greenhouse', 'observatory',
+      'colosseum', 'windmill', 'warehouse', 'stadium', 'planetarium', 'museum',
+      'restaurant', 'airport', 'cemetery', 'pharmacy', 'laundromat', 'monastery',
+      // People & Roles
+      'astronaut', 'detective', 'pirate', 'wizard', 'gladiator', 'ninja', 'cowboy',
+      'lifeguard', 'mechanic', 'bartender', 'dentist', 'clown', 'architect', 'blacksmith',
+      'firefighter', 'ballerina', 'conductor', 'lumberjack', 'shepherd', 'surgeon',
+      // Nature & Weather
+      'avalanche', 'tornado', 'rainbow', 'earthquake', 'glacier', 'meteor', 'quicksand',
+      'stalactite', 'tumbleweed', 'whirlpool', 'thunderstorm', 'blizzard', 'sandstorm',
+      'waterfall', 'canyon', 'geyser', 'coral', 'mushroom', 'sunflower', 'bamboo',
+      // Activities & Sports
+      'surfing', 'karate', 'juggling', 'archery', 'fencing', 'bowling', 'snorkeling',
+      'wrestling', 'marathon', 'dodgeball', 'gymnastics', 'skydiving', 'yodeling',
+      'origami', 'pottery', 'knitting', 'gardening', 'kayaking', 'boxing', 'skiing',
+      // Concepts & Events
+      'fireworks', 'carnival', 'wedding', 'hibernation', 'camouflage', 'migration',
+      'blackout', 'stampede', 'eclipse', 'graduation', 'bankruptcy', 'celebration',
+      'nightmare', 'treasure', 'homework', 'vacation', 'rehearsal', 'auction',
+      // Clothing & Accessories
+      'sombrero', 'monocle', 'suspenders', 'tuxedo', 'flipflops', 'bandana', 'apron',
+      'helmet', 'necklace', 'sunglasses', 'bathrobe', 'raincoat', 'mittens', 'bowtie',
+      // Technology & Vehicles
+      'submarine', 'helicopter', 'spaceship', 'bulldozer', 'motorcycle', 'tractor',
+      'satellite', 'escalator', 'projector', 'microphone', 'headphones', 'joystick',
+      'propeller', 'antenna', 'dashboard', 'carousel', 'gondola', 'rickshaw',
+      // Miscellaneous
+      'butterfly', 'moustache', 'lollipop', 'tadpole', 'snowflake', 'cobweb', 'fossil',
+      'handshake', 'silhouette', 'labyrinth', 'mannequin', 'icicle', 'portrait',
+      'blueprint', 'dominoes', 'pendulum', 'gargoyle', 'confetti', 'tightrope', 'mirage',
+    ];
     const shuffled = fallback.sort(() => Math.random() - 0.5);
     return shuffled.slice(0, count);
   }
+}
+
+function emptyChallenge(): ChallengeSetup {
+  return {
+    cards: [], tabooWords: [], tabooSuggestions: [],
+    tabooBuzzes: {}, ready: false, clueGiverId: null,
+  };
 }
 
 export class Room {
@@ -32,6 +88,7 @@ export class Room {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private onTimerExpired: (() => void) | null = null;
   private _refreshingWord: boolean = false;
+  roundHistory: RoundArchiveEntry[] = [];
 
   constructor(code: string, hostId: string) {
     this.code = code;
@@ -55,36 +112,33 @@ export class Room {
   }
 
   getPlayer(id: string): Player | undefined { return this.players.get(id); }
-
   getPlayerByName(name: string): Player | undefined {
     return Array.from(this.players.values()).find(p => p.name === name);
   }
-
   getTeamPlayers(team: TeamId): Player[] {
     return Array.from(this.players.values()).filter(p => p.team === team && p.connected);
   }
-
   getOpposingTeam(team: TeamId): TeamId { return team === 'A' ? 'B' : 'A'; }
 
   setTabooMaster(team: TeamId, playerId: string): boolean {
     const player = this.getPlayer(playerId);
     if (!player || player.team !== team) return false;
     this.tabooMasters[team] = playerId;
+    if (this.game) this.game.tabooMasters[team] = playerId;
     this.touch();
     return true;
   }
 
-  // If taboo master disconnects, auto-assign another connected team member
   ensureTabooMaster(team: TeamId): string | null {
     const currentId = this.tabooMasters[team];
     if (currentId) {
       const current = this.getPlayer(currentId);
       if (current && current.connected && current.team === team) return currentId;
     }
-    // Auto-assign first connected team member
     const teamPlayers = this.getTeamPlayers(team);
     if (teamPlayers.length > 0) {
       this.tabooMasters[team] = teamPlayers[0].id;
+      if (this.game) this.game.tabooMasters[team] = teamPlayers[0].id;
       return teamPlayers[0].id;
     }
     return null;
@@ -101,61 +155,75 @@ export class Room {
   }
 
   startGame(): void {
-    const firstTeam: TeamId = Math.random() < 0.5 ? 'A' : 'B';
     this.game = {
-      phase: GamePhase.ROUND_SETUP,
+      phase: GamePhase.PARALLEL_SETUP,
       round: 1,
-      turnInRound: 0,
-      firstTeam,
       scores: { A: 0, B: 0 },
-      turn: this.freshTurn(firstTeam),
+      challenges: { A: emptyChallenge(), B: emptyChallenge() },
+      timerEnd: null,
       tabooMasters: { ...this.tabooMasters },
+      turnResults: { A: null, B: null },
     };
     this.touch();
   }
 
-  private freshTurn(activeTeam: TeamId): TurnState {
-    return {
-      activeTeam,
-      clueGiverId: null,
-      cards: [],
-      tabooWords: [],
-      tabooSuggestions: [],
-      tabooBuzzes: {},
-      timerEnd: null,
-    };
+  // Fetch words for both challenges (called after game start)
+  async fetchInitialWords(): Promise<void> {
+    if (!this.game) return;
+    const [wordsForA, wordsForB] = await Promise.all([
+      fetchWords(this.settings.wordsPerTurn),
+      fetchWords(this.settings.wordsPerTurn),
+    ]);
+    if (!this.game) return;
+    this.game.challenges.A.cards = wordsForA.map(w => ({ word: w, result: null }));
+    this.game.challenges.B.cards = wordsForB.map(w => ({ word: w, result: null }));
+    this.touch();
   }
 
-  // Step 1: Set clue-giver synchronously (fast phase transition)
-  setClueGiver(playerId: string): boolean {
-    if (!this.game) return false;
+  // --- Parallel Setup ---
+
+  setClueGiver(team: TeamId, playerId: string): boolean {
+    if (!this.game || this.game.phase !== GamePhase.PARALLEL_SETUP) return false;
     const player = this.getPlayer(playerId);
-    if (!player || player.team !== this.game.turn.activeTeam) return false;
-    this.game.turn.clueGiverId = playerId;
-    this.game.phase = GamePhase.TABOO_INPUT;
+    if (!player || player.team !== team) return false;
+    // Store in the challenge FOR this team
+    this.game.challenges[team].clueGiverId = playerId;
     this.touch();
     return true;
   }
 
-  // Step 2: Fetch words asynchronously (called after phase transition emitted)
-  async fetchAndSetWords(): Promise<WordCard[]> {
-    const words = await fetchWords(this.settings.wordsPerTurn);
+  // forTeam = the team that will be challenged (opposing TM is adding words)
+  suggestTabooWord(forTeam: TeamId, word: string): string[] {
     if (!this.game) return [];
-    this.game.turn.cards = words.map(w => ({ word: w, result: null }));
+    const challenge = this.game.challenges[forTeam];
+    const normalized = word.trim().toLowerCase();
+    if (!normalized || normalized.length > 50 || challenge.tabooSuggestions.includes(normalized)) return challenge.tabooSuggestions;
+    if (challenge.tabooSuggestions.length >= this.settings.maxTabooWords) return challenge.tabooSuggestions;
+    challenge.tabooSuggestions.push(normalized);
     this.touch();
-    return this.game.turn.cards;
+    return challenge.tabooSuggestions;
   }
 
-  async refreshWord(cardIndex: number): Promise<string | null> {
-    if (!this.game || this.game.phase !== GamePhase.TABOO_INPUT) return null;
-    if (cardIndex < 0 || cardIndex >= this.game.turn.cards.length) return null;
-    if (this._refreshingWord) return null; // prevent concurrent refreshes
+  removeTabooWord(forTeam: TeamId, word: string): string[] {
+    if (!this.game) return [];
+    const challenge = this.game.challenges[forTeam];
+    const normalized = word.trim().toLowerCase();
+    challenge.tabooSuggestions = challenge.tabooSuggestions.filter(w => w !== normalized);
+    this.touch();
+    return challenge.tabooSuggestions;
+  }
+
+  async refreshWord(forTeam: TeamId, cardIndex: number): Promise<string | null> {
+    if (!this.game || this.game.phase !== GamePhase.PARALLEL_SETUP) return null;
+    const challenge = this.game.challenges[forTeam];
+    if (cardIndex < 0 || cardIndex >= challenge.cards.length) return null;
+    if (this._refreshingWord) return null;
 
     this._refreshingWord = true;
     try {
       const words = await fetchWords(1);
       if (words.length === 0 || !this.game) return null;
-      this.game.turn.cards[cardIndex] = { word: words[0], result: null };
+      challenge.cards[cardIndex] = { word: words[0], result: null };
       this.touch();
       return words[0];
     } finally {
@@ -163,43 +231,77 @@ export class Room {
     }
   }
 
-  getTabooMasterForOpposing(): string | null {
-    if (!this.game) return null;
-    const opposing = this.getOpposingTeam(this.game.turn.activeTeam);
-    return this.ensureTabooMaster(opposing);
-  }
-
-  suggestTabooWord(word: string): string[] {
-    if (!this.game) return [];
-    const normalized = word.trim().toLowerCase();
-    if (!normalized || this.game.turn.tabooSuggestions.includes(normalized)) return this.game.turn.tabooSuggestions;
-    if (this.game.turn.tabooSuggestions.length >= this.settings.maxTabooWords) return this.game.turn.tabooSuggestions;
-    this.game.turn.tabooSuggestions.push(normalized);
-    this.touch();
-    return this.game.turn.tabooSuggestions;
-  }
-
-  removeTabooWord(word: string): string[] {
-    if (!this.game) return [];
-    const normalized = word.trim().toLowerCase();
-    this.game.turn.tabooSuggestions = this.game.turn.tabooSuggestions.filter(w => w !== normalized);
-    this.touch();
-    return this.game.turn.tabooSuggestions;
-  }
-
-  confirmTabooWords(): boolean {
-    if (!this.game || this.game.turn.tabooSuggestions.length < 1) return false;
-    this.game.turn.tabooWords = [...this.game.turn.tabooSuggestions];
-    this.game.turn.tabooBuzzes = {};
-    this.game.phase = GamePhase.CLUING;
+  confirmChallenge(forTeam: TeamId): boolean {
+    if (!this.game || this.game.phase !== GamePhase.PARALLEL_SETUP) return false;
+    const challenge = this.game.challenges[forTeam];
+    if (challenge.tabooSuggestions.length < 1) return false;
+    challenge.tabooWords = [...challenge.tabooSuggestions];
+    challenge.ready = true;
     this.touch();
     return true;
   }
 
-  startTimer(onExpired: () => void): number {
+  unconfirmChallenge(forTeam: TeamId): boolean {
+    if (!this.game || this.game.phase !== GamePhase.PARALLEL_SETUP) return false;
+    // Can only unlock if BOTH aren't locked (once both lock, it's final)
+    if (this.bothChallengesReady()) return false;
+    this.game.challenges[forTeam].ready = false;
+    this.touch();
+    return true;
+  }
+
+  bothChallengesReady(): boolean {
+    if (!this.game) return false;
+    return this.game.challenges.A.ready && this.game.challenges.B.ready;
+  }
+
+  getSetupStatus(): { A: { ready: boolean; tabooCount: number; hasClueGiver: boolean }; B: { ready: boolean; tabooCount: number; hasClueGiver: boolean } } {
+    if (!this.game) return {
+      A: { ready: false, tabooCount: 0, hasClueGiver: false },
+      B: { ready: false, tabooCount: 0, hasClueGiver: false },
+    };
+    return {
+      A: {
+        ready: this.game.challenges.A.ready,
+        tabooCount: this.game.challenges.A.tabooSuggestions.length,
+        hasClueGiver: !!this.game.challenges.A.clueGiverId,
+      },
+      B: {
+        ready: this.game.challenges.B.ready,
+        tabooCount: this.game.challenges.B.tabooSuggestions.length,
+        hasClueGiver: !!this.game.challenges.B.clueGiverId,
+      },
+    };
+  }
+
+  // --- Cluing ---
+
+  getCluingTeam(): TeamId | null {
+    if (!this.game) return null;
+    if (this.game.phase === GamePhase.CLUING_A) return 'A';
+    if (this.game.phase === GamePhase.CLUING_B) return 'B';
+    return null;
+  }
+
+  getActiveChallenge(): ChallengeSetup | null {
+    const team = this.getCluingTeam();
+    if (!team || !this.game) return null;
+    return this.game.challenges[team];
+  }
+
+  // Step 1: Set phase (no timer yet — clue-giver sees words and presses "Begin")
+  prepareCluingPhase(team: TeamId): void {
+    if (!this.game) return;
+    this.game.phase = team === 'A' ? GamePhase.CLUING_A : GamePhase.CLUING_B;
+    this.game.timerEnd = null;
+    this.touch();
+  }
+
+  // Step 2: Clue-giver presses "Begin" — start the timer
+  beginCluingTimer(onExpired: () => void): number {
     if (!this.game) return 0;
     const end = Date.now() + this.settings.timerSeconds * 1000;
-    this.game.turn.timerEnd = end;
+    this.game.timerEnd = end;
     this.onTimerExpired = onExpired;
     this.timer = setTimeout(() => { this.onTimerExpired?.(); }, this.settings.timerSeconds * 1000);
     this.touch();
@@ -212,106 +314,140 @@ export class Room {
   }
 
   resolveCard(cardIndex: number): boolean {
-    if (!this.game || cardIndex < 0 || cardIndex >= this.game.turn.cards.length) return false;
-    const card = this.game.turn.cards[cardIndex];
+    const challenge = this.getActiveChallenge();
+    if (!challenge || !this.game || cardIndex < 0 || cardIndex >= challenge.cards.length) return false;
+    const card = challenge.cards[cardIndex];
     if (card.result !== null) return false;
     card.result = 'correct';
-    this.game.scores[this.game.turn.activeTeam] += 3;
+    const team = this.getCluingTeam()!;
+    this.game.scores[team] += 3;
     this.touch();
     return true;
   }
 
   undoCard(cardIndex: number): boolean {
-    if (!this.game || cardIndex < 0 || cardIndex >= this.game.turn.cards.length) return false;
-    const card = this.game.turn.cards[cardIndex];
+    const challenge = this.getActiveChallenge();
+    if (!challenge || !this.game || cardIndex < 0 || cardIndex >= challenge.cards.length) return false;
+    const card = challenge.cards[cardIndex];
     if (card.result !== 'correct') return false;
     card.result = null;
-    this.game.scores[this.game.turn.activeTeam] -= 3;
+    const team = this.getCluingTeam()!;
+    this.game.scores[team] -= 3;
     this.touch();
     return true;
   }
 
   allCardsResolved(): boolean {
-    if (!this.game) return false;
-    return this.game.turn.cards.every(c => c.result !== null);
+    const challenge = this.getActiveChallenge();
+    if (!challenge) return false;
+    return challenge.cards.every(c => c.result !== null);
   }
 
   buzzTabooWord(word: string): number {
-    if (!this.game) return 0;
-    if (!this.game.turn.tabooWords.includes(word)) return 0;
-    const current = this.game.turn.tabooBuzzes[word] || 0;
-    this.game.turn.tabooBuzzes[word] = current + 1;
-    this.game.scores[this.game.turn.activeTeam] -= 1;
+    const challenge = this.getActiveChallenge();
+    if (!challenge || !this.game) return 0;
+    if (!challenge.tabooWords.includes(word)) return 0;
+    const current = challenge.tabooBuzzes[word] || 0;
+    challenge.tabooBuzzes[word] = current + 1;
+    const team = this.getCluingTeam()!;
+    this.game.scores[team] -= 1;
     this.touch();
     return current + 1;
   }
 
   undoBuzzTabooWord(word: string): number {
-    if (!this.game) return 0;
-    const current = this.game.turn.tabooBuzzes[word] || 0;
+    const challenge = this.getActiveChallenge();
+    if (!challenge || !this.game) return 0;
+    const current = challenge.tabooBuzzes[word] || 0;
     if (current <= 0) return 0;
-    this.game.turn.tabooBuzzes[word] = current - 1;
-    this.game.scores[this.game.turn.activeTeam] += 1;
+    challenge.tabooBuzzes[word] = current - 1;
+    const team = this.getCluingTeam()!;
+    this.game.scores[team] += 1;
     this.touch();
     return current - 1;
   }
 
-  turnScore(): TurnScoreData {
+  turnScore(team: TeamId): TurnScoreData {
     if (!this.game) return { correct: 0, missed: 0, buzzes: 0, points: 0 };
-    const cards = this.game.turn.cards;
-    const correct = cards.filter(c => c.result === 'correct').length;
-    const missed = cards.filter(c => c.result === null).length;
-    const buzzes = Object.values(this.game.turn.tabooBuzzes).reduce((sum, c) => sum + c, 0);
+    const challenge = this.game.challenges[team];
+    const correct = challenge.cards.filter(c => c.result === 'correct').length;
+    const missed = challenge.cards.filter(c => c.result === null).length;
+    const buzzes = Object.values(challenge.tabooBuzzes).reduce((sum, c) => sum + c, 0);
     return { correct, missed, buzzes, points: correct * 3 - buzzes };
   }
 
-  endTurn(): { nextPhase: GamePhase; nextActiveTeam?: TeamId; turnScore: TurnScoreData } {
+  endCluing(): { nextPhase: GamePhase; turnScore: TurnScoreData } {
     if (!this.game) return { nextPhase: GamePhase.LOBBY, turnScore: { correct: 0, missed: 0, buzzes: 0, points: 0 } };
     this.clearTimer();
-    const score = this.turnScore();
-    const { turnInRound, round } = this.game;
+    const team = this.getCluingTeam()!;
+    const score = this.turnScore(team);
+    this.game.turnResults[team] = score;
+    this.game.timerEnd = null;
 
-    if (turnInRound === 0) {
-      this.game.turnInRound = 1;
-      const nextTeam = this.getOpposingTeam(this.game.turn.activeTeam);
-      this.game.turn = this.freshTurn(nextTeam);
-      this.game.phase = GamePhase.TURN_RESULT;
-      return { nextPhase: GamePhase.TURN_RESULT, nextActiveTeam: nextTeam, turnScore: score };
+    if (this.game.phase === GamePhase.CLUING_A) {
+      this.game.phase = GamePhase.CLUING_B;
+      return { nextPhase: GamePhase.CLUING_B, turnScore: score };
     } else {
-      if (round >= this.settings.rounds) {
+      // Both teams done — archive this round before transitioning
+      this.archiveCurrentRound();
+      if (this.game.round >= this.settings.rounds) {
         this.game.phase = GamePhase.GAME_OVER;
         return { nextPhase: GamePhase.GAME_OVER, turnScore: score };
-      } else {
-        this.game.round += 1;
-        this.game.turnInRound = 0;
-        this.game.firstTeam = this.getOpposingTeam(this.game.firstTeam);
-        this.game.turn = this.freshTurn(this.game.firstTeam);
-        this.game.phase = GamePhase.TURN_RESULT;
-        return { nextPhase: GamePhase.TURN_RESULT, nextActiveTeam: this.game.firstTeam, turnScore: score };
       }
+      this.game.phase = GamePhase.ROUND_RESULT;
+      return { nextPhase: GamePhase.ROUND_RESULT, turnScore: score };
     }
   }
 
-  advanceFromTurnResult(): void {
-    if (!this.game || this.game.phase === GamePhase.GAME_OVER) return;
-    this.game.phase = GamePhase.ROUND_SETUP;
+  advanceToNextRound(): void {
+    if (!this.game || this.game.phase !== GamePhase.ROUND_RESULT) return;
+    this.game.round += 1;
+    this.game.challenges = { A: emptyChallenge(), B: emptyChallenge() };
+    this.game.turnResults = { A: null, B: null };
+    this.game.timerEnd = null;
+    this.game.phase = GamePhase.PARALLEL_SETUP;
     this.touch();
+  }
+
+
+  private archiveCurrentRound(): void {
+    if (!this.game) return;
+    const archiveTeam = (team: TeamId): TeamRoundData => {
+      const challenge = this.game!.challenges[team];
+      const opposingTeam = this.getOpposingTeam(team);
+      const clueGiver = challenge.clueGiverId ? this.getPlayer(challenge.clueGiverId) : null;
+      const opposingTM = this.tabooMasters[opposingTeam] ? this.getPlayer(this.tabooMasters[opposingTeam]!) : null;
+      return {
+        cards: challenge.cards.map(c => ({ ...c })),
+        tabooWords: [...challenge.tabooWords],
+        tabooBuzzes: { ...challenge.tabooBuzzes },
+        turnScore: this.game!.turnResults[team] ?? { correct: 0, missed: 0, buzzes: 0, points: 0 },
+        clueGiverName: clueGiver?.name ?? 'Unknown',
+        tabooMasterName: opposingTM?.name ?? 'Unknown',
+      };
+    };
+    this.roundHistory.push({
+      round: this.game.round,
+      teams: { A: archiveTeam('A'), B: archiveTeam('B') },
+    });
+  }
+
+  getRoundHistory(): RoundArchiveEntry[] {
+    return this.roundHistory;
   }
 
   resetToLobby(): void {
     this.game = null;
     this.clearTimer();
+    this.roundHistory = [];
     this.touch();
   }
 
   toDTO(): RoomDTO {
     return {
-      code: this.code,
-      hostId: this.hostId,
-      players: this.playerDTOs(),
-      settings: { ...this.settings },
-      phase: this.game?.phase ?? null,
-      tabooMasters: { ...this.tabooMasters },
+      code: this.code, hostId: this.hostId,
+      players: this.playerDTOs(), settings: { ...this.settings },
+      phase: this.game?.phase ?? null, tabooMasters: { ...this.tabooMasters },
     };
   }
 

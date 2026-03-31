@@ -1,9 +1,10 @@
-import { useGameStore, useTeamPlayers } from '../store';
+import { useGameStore, useTeamPlayers, useIsHost } from '../store';
 import { socket } from '../socket';
 
 export default function GameOverScreen() {
   const scores = useGameStore(s => s.scores);
   const winner = scores.A > scores.B ? 'A' : scores.B > scores.A ? 'B' : null;
+  const isHost = useIsHost();
   const teamA = useTeamPlayers('A');
   const teamB = useTeamPlayers('B');
 
@@ -42,13 +43,17 @@ export default function GameOverScreen() {
       </div>
 
       <div className="w-full max-w-xs space-y-3 relative z-10">
-        <button
-          onClick={() => socket.emit('game:play-again')}
-          className="btn-primary w-full py-4 rounded-2xl text-white font-display text-lg
-                     tracking-wider transition-all active:scale-[0.97]"
-        >
-          Play Again
-        </button>
+        {isHost ? (
+          <button
+            onClick={() => socket.emit('game:play-again')}
+            className="btn-primary w-full py-4 rounded-2xl text-white font-display text-lg
+                       tracking-wider transition-all active:scale-[0.97]"
+          >
+            Play Again
+          </button>
+        ) : (
+          <div className="text-center text-gray-600 text-xs py-2">Waiting for host...</div>
+        )}
         <button
           onClick={() => {
             socket.emit('room:leave');

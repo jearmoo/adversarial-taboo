@@ -6,13 +6,46 @@ export default function ClueGiverScreen() {
   const cards = useGameStore(s => s.cards);
   const timerEnd = useGameStore(s => s.timerEnd);
   const scores = useGameStore(s => s.scores);
-  const activeTeam = useGameStore(s => s.activeTeam);
+  const cluingTeam = useGameStore(s => s.cluingTeam);
   const tabooBuzzes = useGameStore(s => s.tabooBuzzes);
+  const settings = useGameStore(s => s.settings);
 
   const buzzedWords = Object.entries(tabooBuzzes).filter(([_, c]) => c > 0);
   const totalBuzzes = buzzedWords.reduce((sum, [_, c]) => sum + c, 0);
   const correctCount = cards.filter(c => c.result === 'correct').length;
   const liveScore = correctCount * 3 - totalBuzzes;
+  const timerNotStarted = timerEnd === null;
+
+  // Before timer starts: don't show words yet
+  if (timerNotStarted) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6 gap-8 animate-fade-in">
+        <div className="text-center">
+          <div className="text-[10px] uppercase tracking-[0.3em] text-gray-500 mb-2">
+            Team {cluingTeam}'s turn
+          </div>
+          <div className="font-display text-2xl text-white tracking-wider">
+            You're the Clue-Giver
+          </div>
+        </div>
+
+        <div className="glass-card rounded-2xl p-6 max-w-xs border border-white/5 text-center">
+          <p className="text-gray-400 text-sm leading-relaxed">
+            You have {cards.length} words to describe.
+          </p>
+          <p className="text-gray-500 text-xs mt-3">
+            Words and the {settings.timerSeconds}s timer will appear when you press begin.
+          </p>
+        </div>
+
+        <button onClick={() => socket.emit('clue:begin')}
+          className="btn-success w-full max-w-sm py-5 rounded-2xl text-white font-display text-xl
+                     tracking-wider transition-all active:scale-[0.97]">
+          Begin Cluing
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col p-4 gap-3 animate-fade-in">
@@ -80,6 +113,14 @@ export default function ClueGiverScreen() {
           </div>
         </div>
       )}
+
+      {/* End Turn Early */}
+      <button onClick={() => socket.emit('clue:end-turn')}
+        className="w-full py-2.5 rounded-xl border border-gray-700 text-gray-500 font-display text-xs
+                   tracking-wider hover:border-gray-500 hover:text-gray-300 hover:bg-white/[0.03]
+                   transition-all active:scale-[0.97]">
+        End Turn
+      </button>
     </div>
   );
 }
