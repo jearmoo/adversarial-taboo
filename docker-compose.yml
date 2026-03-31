@@ -1,6 +1,9 @@
 services:
   taboo:
-    build: .
+    build:
+      context: .
+      args:
+        GA_MEASUREMENT_ID: ${GA_MEASUREMENT_ID:-}
     env_file: .env
     container_name: adversarial-taboo
     restart: unless-stopped

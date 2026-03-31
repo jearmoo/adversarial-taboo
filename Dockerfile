@@ -1,5 +1,7 @@
 # Stage 1: Build client
 FROM node:20-alpine AS client-build
+ARG GA_MEASUREMENT_ID
+ENV VITE_GA_ID=$GA_MEASUREMENT_ID
 WORKDIR /app/client
 COPY client/package*.json ./
 RUN npm ci
