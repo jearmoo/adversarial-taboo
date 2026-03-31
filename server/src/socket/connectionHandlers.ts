@@ -1,5 +1,6 @@
 import { SocketContext } from './context';
 import { logger } from '../logger';
+import { metrics } from '../metrics';
 
 const RECONNECT_GRACE_MS = 120_000;
 
@@ -9,6 +10,7 @@ export function registerConnectionHandlers(ctx: SocketContext) {
   socket.on('room:leave', () => handleLeave(ctx));
 
   socket.on('disconnect', () => {
+    metrics.playerDisconnected();
     const playerId = ctx.getPlayerId();
     if (!playerId) return;
     const room = rooms.getRoomForPlayer(playerId);

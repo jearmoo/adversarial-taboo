@@ -1,6 +1,7 @@
 import { GamePhase, TeamId } from '../game/types';
 import { SocketContext, buildGameState } from './context';
 import { logger } from '../logger';
+import { metrics } from '../metrics';
 import { randomUUID } from 'crypto';
 
 export function registerLobbyHandlers(ctx: SocketContext) {
@@ -14,6 +15,7 @@ export function registerLobbyHandlers(ctx: SocketContext) {
     rooms.trackPlayer(playerId, room.code);
     socket.join(room.code);
     socket.emit('room:created', { roomCode: room.code, playerId, room: room.toDTO() });
+    metrics.roomCreated();
     logger.info('room', 'Room created', { room: room.code, player: playerName });
   });
 
@@ -71,6 +73,7 @@ export function registerLobbyHandlers(ctx: SocketContext) {
     socket.to(room.code).emit('room:player-joined', {
       player: { id: playerId, name: playerName, team: null, connected: true },
     });
+    metrics.playerJoined();
     logger.info('room', 'Player joined', { room: room.code, player: playerName });
   });
 
@@ -125,6 +128,7 @@ export function registerLobbyHandlers(ctx: SocketContext) {
     if (!check.ok) { socket.emit('room:error', { message: check.reason }); return; }
 
     room.startGame();
+    metrics.gameStarted();
     logger.info('game', 'Game started', {
       room: room.code, players: room.playerDTOs().map(p => p.name), settings: room.settings,
     });

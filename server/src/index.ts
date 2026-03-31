@@ -5,6 +5,7 @@ import path from 'path';
 import { RoomManager } from './game/RoomManager';
 import { registerHandlers } from './socket/handlers';
 import { logger } from './logger';
+import { metrics } from './metrics';
 
 const PORT = parseInt(process.env.PORT || '4040', 10);
 const app = express();
@@ -16,6 +17,11 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
   },
   transports: ['websocket', 'polling'],
+});
+
+app.get('/api/metrics', (req, res) => {
+  const days = req.query.days ? parseInt(req.query.days as string, 10) : undefined;
+  res.json(metrics.getStats(days && !isNaN(days) ? days : undefined));
 });
 
 if (process.env.NODE_ENV === 'production') {

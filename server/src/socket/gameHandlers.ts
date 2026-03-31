@@ -1,6 +1,7 @@
 import { GamePhase } from '../game/types';
 import { SocketContext } from './context';
 import { logger } from '../logger';
+import { metrics } from '../metrics';
 import { prepareCluingPhase } from './setupHandlers';
 import { emitSetupCards } from './lobbyHandlers';
 
@@ -12,6 +13,9 @@ function handleTurnEnd(room: any, team: 'A' | 'B', io: any) {
     io.to(room.code).emit('turn:transition', { phase: GamePhase.CLUING_B, turnScore: result.turnScore, scores: room.game.scores });
     prepareCluingPhase(room, 'B', io);
   } else {
+    if (result.nextPhase === GamePhase.GAME_OVER) {
+      metrics.gameCompleted();
+    }
     io.to(room.code).emit('round:ended', {
       phase: result.nextPhase, scores: room.game.scores,
       round: room.game.round, turnResults: room.game.turnResults,

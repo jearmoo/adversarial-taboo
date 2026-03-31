@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     ports:
       - "4040:4040"
+    volumes:
+      - ./data:/data
     environment:
       - NODE_ENV=production
       - PORT=4040
