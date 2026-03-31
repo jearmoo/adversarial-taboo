@@ -49,6 +49,9 @@ export default function ScoringScreen() {
           {round < settings.rounds ? 'Next Round' : 'See Final Results'}
         </button>
       )}
+      {!host && !isGameOver && (
+        <div className="text-gray-600 text-xs tracking-wider">Waiting for host to continue...</div>
+      )}
 
       {isGameOver && (
         <div className="w-full max-w-xs space-y-3">

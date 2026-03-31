@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export function HelpButton({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
@@ -17,7 +18,7 @@ export function HelpButton({ className }: { className?: string }) {
 }
 
 export default function HelpModal({ onClose }: { onClose: () => void }) {
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative glass-card rounded-2xl border border-white/10 max-w-sm w-full max-h-[80vh] overflow-auto p-5 animate-fade-in"
@@ -76,6 +77,7 @@ export default function HelpModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -117,6 +117,9 @@ export default function LobbyScreen() {
             : 'Start Game'}
         </button>
       )}
+      {!host && (
+        <div className="w-full py-3 text-center text-gray-600 text-xs tracking-wider">Waiting for host to start the game...</div>
+      )}
     </div>
   );
 }

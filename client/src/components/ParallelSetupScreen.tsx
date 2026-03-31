@@ -48,6 +48,7 @@ export default function ParallelSetupScreen() {
   };
 
   const canLockIn = tabooSuggestions.length >= 1 && ownClueGiverId !== null;
+  const isLocked = myChallengeReady?.ready ?? false;
 
   return (
     <div className="h-full flex flex-col p-4 gap-3 animate-fade-in">
@@ -73,7 +74,7 @@ export default function ParallelSetupScreen() {
         {clueGiverName ? (
           <div className="flex items-center justify-between">
             <span className="text-emerald-400 font-semibold text-sm">{clueGiverName}</span>
-            {isTM && (
+            {isTM && !isLocked && (
               <div className="flex gap-1">
                 {teamPlayers.filter(p => p.id !== ownClueGiverId && p.connected).map(p => (
                   <button key={p.id}
@@ -118,7 +119,7 @@ export default function ParallelSetupScreen() {
                 <span className="font-display text-base text-white tracking-wider">{card.word}</span>
                 {isTM && (
                   <button onClick={() => handleRefresh(i)}
-                    disabled={refreshingIdx !== null}
+                    disabled={refreshingIdx !== null || isLocked}
                     className={`text-xs transition-colors ${
                       refreshingIdx === i ? 'text-accent animate-spin' : 'text-gray-600 hover:text-accent'
                     } disabled:opacity-50`}>↻</button>
@@ -140,10 +141,10 @@ export default function ParallelSetupScreen() {
       <div className="flex gap-2">
         <input type="text" value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleAdd()}
-          placeholder="Type a taboo word..." maxLength={30} disabled={wordsLoading}
+          placeholder={isLocked ? "Locked in" : "Type a taboo word..."} maxLength={30} disabled={wordsLoading || isLocked}
           className="game-input flex-1 px-4 py-3 rounded-xl text-white placeholder-gray-600 disabled:opacity-50" />
         <button onClick={handleAdd}
-          disabled={!input.trim() || tabooSuggestions.length >= settings.maxTabooWords || wordsLoading}
+          disabled={!input.trim() || tabooSuggestions.length >= settings.maxTabooWords || wordsLoading || isLocked}
           className="btn-team-b px-5 py-3 rounded-xl text-white font-display tracking-wider
                      disabled:opacity-30 disabled:shadow-none transition-all active:scale-[0.97]">
           Add
@@ -157,7 +158,7 @@ export default function ParallelSetupScreen() {
             <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1.5
               bg-team-b/15 text-team-b-glow rounded-xl text-sm font-medium border border-team-b/20">
               {word}
-              {isTM && (
+              {isTM && !isLocked && (
                 <button onClick={() => socket.emit('setup:remove', { word })}
                   className="text-team-b-glow/50 hover:text-white text-xs">&times;</button>
               )}
@@ -171,7 +172,7 @@ export default function ParallelSetupScreen() {
       </div>
 
       {/* Lock in / Unlock */}
-      {isTM && (
+      {isTM ? (
         myChallengeReady?.ready ? (
           <button onClick={() => socket.emit('setup:unconfirm')}
             className="w-full py-4 bg-surface-raised hover:bg-surface-hover border border-emerald-500/30
@@ -189,6 +190,14 @@ export default function ParallelSetupScreen() {
              'Lock In'}
           </button>
         )
+      ) : (
+        <div className={`w-full py-3 rounded-2xl text-center font-display tracking-wider text-sm ${
+          isLocked
+            ? 'border border-emerald-500/20 text-emerald-400/80 bg-emerald-500/5'
+            : 'border border-white/5 text-gray-600'
+        }`}>
+          {isLocked ? 'Your team is locked in' : 'Waiting for TM to lock in...'}
+        </div>
       )}
     </div>
   );
