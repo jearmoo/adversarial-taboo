@@ -16,6 +16,7 @@ export function registerLobbyHandlers(ctx: SocketContext) {
     socket.join(room.code);
     socket.emit('room:created', { roomCode: room.code, playerId, room: room.toDTO() });
     metrics.roomCreated();
+    metrics.playerJoined();
     logger.info('room', 'Room created', { room: room.code, player: playerName });
   });
 
