@@ -44,6 +44,20 @@ docker compose up -d --build
 - `round:ended` — includes `roundHistory` for the history panel
 - `room:host-updated` — immediate host reassignment on disconnect
 
+### Metrics (`server/src/metrics.ts`)
+- **Counters** (persisted to `/data/metrics.json`, flushed every 60s):
+  - `roomsCreated` — on `room:create`
+  - `playersJoined` — on `room:create` (host) + `room:join` (new players, not reconnects)
+  - `gamesStarted` — on `game:start`
+  - `gamesCompleted` — when final round's team B cluing ends (`GAME_OVER`)
+- **Gauges** (computed live at query time):
+  - `connections` — `io.engine.clientsCount` (raw WebSocket connections)
+  - `activePlayers` — `playerToRoom.size` (includes disconnected players in 120s grace window)
+  - `activeRooms` — `rooms.size`
+- **API**: `GET /api/metrics?days=N` — requires `Authorization: Bearer <token>`
+- Daily buckets pruned to 30 days on each flush
+- Deep merge on load so new counter fields get defaults from older persisted data
+
 ## Style Guide
 
 - Dark glassmorphism theme: `glass-card`, team colors (blue A / red B), accent amber

@@ -72,6 +72,22 @@ Game settings are configurable by the host in the lobby:
 | Words per turn | 5 | 1-10 |
 | Max taboo words | 20 | 5-30 |
 
+## Metrics
+
+The server collects usage metrics persisted to `/data/metrics.json` (Docker volume) and exposed via API:
+
+```bash
+# All-time stats
+curl -H "Authorization: Bearer <token>" http://localhost:4040/api/metrics
+
+# Last 7 days
+curl -H "Authorization: Bearer <token>" "http://localhost:4040/api/metrics?days=7"
+```
+
+**Counters**: rooms created, players joined, games started, games completed (daily bucketed, 30-day retention)
+
+**Gauges**: active WebSocket connections, players in rooms, active rooms
+
 ## Project Structure
 
 ```
@@ -80,6 +96,7 @@ adversarial-taboo/
 │   └── src/
 │       ├── index.ts           # Express + Socket.IO entry point
 │       ├── logger.ts          # Structured JSON logging
+│       ├── metrics.ts         # Usage metrics with JSON persistence
 │       ├── game/
 │       │   ├── types.ts       # Shared type definitions
 │       │   ├── Room.ts        # Room state machine, game logic, round archiving
