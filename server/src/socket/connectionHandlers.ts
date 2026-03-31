@@ -30,6 +30,17 @@ export function registerConnectionHandlers(ctx: SocketContext) {
       });
     }
 
+    if (room.hostId === playerId) {
+      const newHost = Array.from(room.players.values()).find(p => p.connected && p.id !== playerId);
+      if (newHost) {
+        room.hostId = newHost.id;
+        io.to(room.code).emit('room:host-updated', { hostId: newHost.id });
+        logger.info('conn', 'Host auto-reassigned', {
+          room: room.code, oldHost: player.name, newHost: newHost.name,
+        });
+      }
+    }
+
     setTimeout(() => {
       if (player.connected) return;
       logger.info('conn', 'Player removed after grace period', { room: room.code, player: player.name });

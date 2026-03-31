@@ -117,6 +117,9 @@ socket.on('room:player-reconnected', ({ playerId: pid }) => {
     players: s.players.map(p => p.id === pid ? { ...p, connected: true } : p),
   }));
 });
+socket.on('room:host-updated', ({ hostId }) => {
+  useGameStore.setState({ hostId });
+});
 
 // Lobby
 socket.on('team:updated', ({ players }) => { useGameStore.setState({ players }); });
