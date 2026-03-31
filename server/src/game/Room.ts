@@ -245,6 +245,12 @@ export class Room {
     return end;
   }
 
+  // Restore a timer from persisted timerEnd (used after container restart)
+  restoreTimer(remainingMs: number, onExpired: () => void): void {
+    this.onTimerExpired = onExpired;
+    this.timer = setTimeout(() => { this.onTimerExpired?.(); }, remainingMs);
+  }
+
   clearTimer(): void {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
     this.onTimerExpired = null;
@@ -392,5 +398,43 @@ export class Room {
     return Array.from(this.players.values()).map(p => ({
       id: p.id, name: p.name, team: p.team, connected: p.connected,
     }));
+  }
+
+  toJSON(): object {
+    return {
+      code: this.code,
+      hostId: this.hostId,
+      lastActivity: this.lastActivity,
+      settings: this.settings,
+      tabooMasters: this.tabooMasters,
+      players: Array.from(this.players.values()).map(p => ({
+        id: p.id, name: p.name, team: p.team,
+        connected: p.connected, disconnectedAt: p.disconnectedAt,
+      })),
+      game: this.game,
+      roundHistory: this.roundHistory,
+    };
+  }
+
+  static fromJSON(data: any): Room {
+    const room = new Room(data.code, data.hostId);
+    room.lastActivity = data.lastActivity ?? Date.now();
+    room.settings = { ...room.settings, ...data.settings };
+    room.tabooMasters = data.tabooMasters ?? { A: null, B: null };
+    room.roundHistory = data.roundHistory ?? [];
+    room.game = data.game ?? null;
+
+    for (const p of (data.players ?? [])) {
+      room.players.set(p.id, {
+        id: p.id,
+        name: p.name,
+        team: p.team,
+        socketId: '',
+        connected: false,
+        disconnectedAt: Date.now(),
+      });
+    }
+
+    return room;
   }
 }

@@ -4,11 +4,13 @@ import { Server } from 'socket.io';
 import path from 'path';
 import { RoomManager } from './game/RoomManager';
 import { registerHandlers } from './socket/handlers';
+import { handleTurnEnd } from './socket/gameHandlers';
 import { logger } from './logger';
 import { metrics } from './metrics';
 
 const PORT = parseInt(process.env.PORT || '4040', 10);
 const METRICS_TOKEN = process.env.METRICS_TOKEN;
+const ROOMS_PATH = process.env.ROOMS_PATH || '/data/rooms.json';
 const app = express();
 const httpServer = createServer(app);
 
@@ -46,6 +48,20 @@ if (process.env.NODE_ENV === 'production') {
 
 const rooms = new RoomManager();
 registerHandlers(io, rooms);
+
+// Restore rooms saved from previous shutdown
+rooms.restore(ROOMS_PATH, (room, team) => handleTurnEnd(room, team, io));
+
+function shutdown() {
+  logger.info('server', 'Shutting down, saving state...');
+  rooms.save(ROOMS_PATH);
+  metrics.destroy();
+  rooms.destroy();
+  process.exit(0);
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 io.engine.on('connection_error', (err: any) => {
   logger.error('server', 'Socket.IO connection error', { code: err.code, message: err.message });

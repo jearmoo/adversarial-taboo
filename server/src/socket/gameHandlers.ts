@@ -5,7 +5,7 @@ import { metrics } from '../metrics';
 import { prepareCluingPhase } from './setupHandlers';
 import { emitSetupCards } from './lobbyHandlers';
 
-function handleTurnEnd(room: any, team: 'A' | 'B', io: any) {
+export function handleTurnEnd(room: any, team: 'A' | 'B', io: any) {
   const result = room.endCluing();
   logger.info('game', 'Cluing ended', { room: room.code, team, turnScore: result.turnScore });
 
