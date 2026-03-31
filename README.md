@@ -53,6 +53,29 @@ npm run dev
 
 The client proxies Socket.IO connections to the server via Vite's dev proxy.
 
+### Testing
+
+```bash
+npm test             # Run server unit tests (Vitest)
+```
+
+Server-side tests cover the Room state machine (player management, game flow, scoring, serialization) and RoomManager (room lifecycle, persistence, player tracking).
+
+### Linting & Formatting
+
+```bash
+npm run lint         # ESLint across client + server
+npm run typecheck    # TypeScript type checking
+npm run format       # Auto-format with Prettier
+npm run format:check # Check formatting without writing
+```
+
+### CI/CD
+
+GitHub Actions runs on every push and pull request:
+- Lint + type check + unit tests
+- Docker image build verification
+
 ## Docker Deployment
 
 ```bash
@@ -117,6 +140,7 @@ Optional analytics via Google Analytics 4. Set `GA_MEASUREMENT_ID` in `.env` bef
 
 ```
 adversarial-taboo/
+├── .github/workflows/ci.yml  # CI: lint, typecheck, test, Docker build
 ├── server/                    # Node.js + Socket.IO backend
 │   └── src/
 │       ├── index.ts           # Express + Socket.IO entry point
@@ -125,7 +149,9 @@ adversarial-taboo/
 │       ├── game/
 │       │   ├── types.ts       # Shared type definitions
 │       │   ├── Room.ts        # Room state machine, game logic, round archiving
-│       │   └── RoomManager.ts # Room lifecycle management
+│       │   ├── Room.test.ts   # Room unit tests (Vitest)
+│       │   ├── RoomManager.ts # Room lifecycle management
+│       │   └── RoomManager.test.ts # RoomManager unit tests (Vitest)
 │       ├── words/
 │       │   ├── WordProvider.ts    # Provider interface + fallback word list wrapper
 │       │   ├── charades.ts        # randomwordgenerator.com provider (active)
@@ -144,6 +170,7 @@ adversarial-taboo/
 │       ├── store.ts           # Zustand game store + reactive hooks
 │       ├── socket.ts          # Socket.IO client
 │       ├── socketListeners.ts # All socket event handlers + reconnect state restore
+│       ├── constants.ts       # Shared constants (session key)
 │       └── components/
 │           ├── HomeScreen.tsx          # Create/join room
 │           ├── LobbyScreen.tsx         # Team assignment + settings
@@ -157,6 +184,8 @@ adversarial-taboo/
 │           ├── HistoryPanel.tsx        # Round-by-round history overlay
 │           ├── HelpModal.tsx           # How-to-play overlay
 │           └── Timer.tsx              # Countdown display
+├── eslint.config.js           # ESLint flat config (TypeScript)
+├── .prettierrc                # Prettier config
 ├── Dockerfile                 # 3-stage build (client → server → production)
 ├── docker-compose.yml
 ├── .env.example               # Template for environment variables

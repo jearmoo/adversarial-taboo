@@ -12,12 +12,24 @@ Real-time multiplayer party game. Two teams compete: opposing Taboo Masters set 
 
 ```bash
 npm run dev          # runs both client (:5173) and server (:4040)
+npm test             # run server unit tests (Vitest)
+npm run lint         # ESLint across client + server
+npm run typecheck    # TypeScript checking for both
+npm run format       # Prettier auto-format
 ```
 
-No local TypeScript compiler — use Docker to verify builds:
+Docker build to verify everything compiles:
 ```bash
 docker compose up -d --build
 ```
+
+### Testing
+- Framework: Vitest (server-side only)
+- Test files: `server/src/game/Room.test.ts`, `server/src/game/RoomManager.test.ts`
+- Coverage: Room state machine, player management, game flow, scoring, serialization, persistence
+
+### CI
+- GitHub Actions (`.github/workflows/ci.yml`): lint, typecheck, test, Docker build on every push/PR
 
 ## Architecture
 
@@ -64,6 +76,11 @@ docker compose up -d --build
 - Optional: set `GA_MEASUREMENT_ID` in `.env` (injected at build time via `VITE_GA_ID`)
 - Custom dimension `game_name: 'adversarial-taboo'` sent with all events
 - Self-disables if ID is absent
+
+### Code Quality
+- **ESLint**: flat config (`eslint.config.js`) with TypeScript ESLint — warns on unused vars, explicit `any`, `console.log`
+- **Prettier**: single quotes, trailing commas, 120 print width (`.prettierrc`)
+- **Shared constants**: `client/src/constants.ts` (e.g., `SESSION_KEY`)
 
 ## Style Guide
 
