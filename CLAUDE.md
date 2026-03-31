@@ -29,7 +29,8 @@ docker compose up -d --build
 - `challenges[X]` = challenge FOR team X (created BY opposing TM)
 - `challenges[X].clueGiverId` = team X's clue-giver
 - `setupStatus[X]` = readiness of challenge FOR team X
-- State is in-memory only — no persistence
+- State persisted to `/data/rooms.json` — snapshots every 60s, on graceful shutdown, and on unhandled exceptions; atomic writes via temp file + rename; fallback to `.tmp` if primary is corrupt
+- On restart, rooms restore with players marked disconnected; clients auto-reconnect via Socket.IO
 
 ### Key Patterns
 - **Role-based emissions**: server sends different data to clue-giver vs guessers vs opposing team (word masking)
@@ -57,6 +58,12 @@ docker compose up -d --build
 - **API**: `GET /api/metrics?days=N` — requires `Authorization: Bearer <token>`
 - Daily buckets pruned to 30 days on each flush
 - Deep merge on load so new counter fields get defaults from older persisted data
+- `METRICS_TOKEN` env var required for API auth
+
+### Google Analytics
+- Optional: set `GA_MEASUREMENT_ID` in `.env` (injected at build time via `VITE_GA_ID`)
+- Custom dimension `game_name: 'adversarial-taboo'` sent with all events
+- Self-disables if ID is absent
 
 ## Style Guide
 

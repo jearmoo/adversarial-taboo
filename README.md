@@ -72,21 +72,46 @@ Game settings are configurable by the host in the lobby:
 | Words per turn | 5 | 1-10 |
 | Max taboo words | 20 | 5-30 |
 
+## Environment Variables
+
+Configure via `.env` file (see `.env.example`):
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `METRICS_TOKEN` | Yes | Bearer token for `/api/metrics` endpoint |
+| `GA_MEASUREMENT_ID` | No | Google Analytics measurement ID (build-time) |
+
+## State Persistence
+
+Game state is persisted to `/data/rooms.json` (Docker volume) and survives container restarts:
+
+- **Periodic snapshots** every 60 seconds
+- **Graceful shutdown** saves on SIGTERM/SIGINT (30s grace period)
+- **Crash recovery** saves on uncaught exceptions/unhandled rejections
+- **Atomic writes** via temp file + rename to prevent corruption
+- **Fallback restore** from `.tmp` file if primary is corrupt
+
+On restart, rooms are restored with all players marked as disconnected. Socket.IO auto-reconnects clients, who rejoin seamlessly. Active cluing timers are reconstructed from persisted timestamps.
+
 ## Metrics
 
 The server collects usage metrics persisted to `/data/metrics.json` (Docker volume) and exposed via API:
 
 ```bash
 # All-time stats
-curl -H "Authorization: Bearer <token>" http://localhost:4040/api/metrics
+curl -H "Authorization: Bearer $METRICS_TOKEN" http://localhost:4040/api/metrics
 
 # Last 7 days
-curl -H "Authorization: Bearer <token>" "http://localhost:4040/api/metrics?days=7"
+curl -H "Authorization: Bearer $METRICS_TOKEN" "http://localhost:4040/api/metrics?days=7"
 ```
 
 **Counters**: rooms created, players joined, games started, games completed (daily bucketed, 30-day retention)
 
 **Gauges**: active WebSocket connections, players in rooms, active rooms
+
+## Google Analytics
+
+Optional analytics via Google Analytics 4. Set `GA_MEASUREMENT_ID` in `.env` before building. A custom dimension `game_name: 'adversarial-taboo'` is sent with all events. Self-disables if the ID is absent.
 
 ## Project Structure
 
@@ -133,5 +158,9 @@ adversarial-taboo/
 │           ├── HelpModal.tsx           # How-to-play overlay
 │           └── Timer.tsx              # Countdown display
 ├── Dockerfile                 # 3-stage build (client → server → production)
-└── docker-compose.yml
+├── docker-compose.yml
+├── .env.example               # Template for environment variables
+└── data/                      # Docker volume (gitignored)
+    ├── rooms.json             # Persisted game state
+    └── metrics.json           # Usage metrics
 ```
