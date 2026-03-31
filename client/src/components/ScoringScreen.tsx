@@ -1,4 +1,4 @@
-import { useGameStore, useIsHost } from '../store';
+import { useGameStore, useIsHost, SESSION_KEY } from '../store';
 import { socket } from '../socket';
 
 export default function ScoringScreen() {
@@ -59,7 +59,7 @@ export default function ScoringScreen() {
             className="btn-primary w-full py-4 rounded-2xl text-white font-display text-lg tracking-wider transition-all active:scale-[0.97]">
             Play Again
           </button>
-          <button onClick={() => { socket.emit('room:leave'); useGameStore.getState().reset(); localStorage.removeItem('adtaboo_session'); }}
+          <button onClick={() => { socket.emit('room:leave'); useGameStore.getState().reset(); localStorage.removeItem(SESSION_KEY); }}
             className="w-full py-3 text-gray-500 hover:text-white transition-colors text-sm">
             Leave Room
           </button>

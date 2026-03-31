@@ -1,7 +1,5 @@
 import { socket } from './socket';
-import { useGameStore, initialState } from './store';
-
-const SESSION_KEY = 'adtaboo_session';
+import { useGameStore, initialState, SESSION_KEY } from './store';
 
 function saveSession() {
   const { roomCode, playerId, playerName } = useGameStore.getState();

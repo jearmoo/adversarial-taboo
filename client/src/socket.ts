@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { SESSION_KEY } from './constants';
 
 const URL = import.meta.env.PROD ? window.location.origin : 'http://localhost:4040';
 
@@ -12,7 +13,7 @@ socket.on('connect', () => {
   const urlPath = window.location.pathname.replace(/^\//, '');
   if (/^[A-Za-z0-9]{4}$/.test(urlPath)) return;
 
-  const saved = localStorage.getItem('adtaboo_session');
+  const saved = localStorage.getItem(SESSION_KEY);
   if (saved) {
     try {
       const { roomCode, playerId, playerName } = JSON.parse(saved);

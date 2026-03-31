@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useGameStore, useTeamPlayers, useIsHost } from '../store';
+import { useGameStore, useTeamPlayers, useIsHost, SESSION_KEY } from '../store';
 import { socket } from '../socket';
 
 function Confetti({ color }: { color: 'A' | 'B' }) {
@@ -114,7 +114,7 @@ export default function GameOverScreen() {
           onClick={() => {
             socket.emit('room:leave');
             useGameStore.getState().reset();
-            localStorage.removeItem('adtaboo_session');
+            localStorage.removeItem(SESSION_KEY);
           }}
           className="w-full py-3 text-gray-500 hover:text-white transition-colors text-sm"
         >

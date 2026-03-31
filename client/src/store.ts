@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+export { SESSION_KEY } from './constants';
 
 export type GamePhase = 'LOBBY' | 'PARALLEL_SETUP' | 'CLUING_A' | 'CLUING_B' | 'ROUND_RESULT' | 'GAME_OVER';
 export type TeamId = 'A' | 'B';
