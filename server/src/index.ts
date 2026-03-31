@@ -21,7 +21,11 @@ const io = new Server(httpServer, {
 
 app.get('/api/metrics', (req, res) => {
   const days = req.query.days ? parseInt(req.query.days as string, 10) : undefined;
-  res.json(metrics.getStats(days && !isNaN(days) ? days : undefined));
+  res.json(metrics.getStats({
+    days: days && !isNaN(days) ? days : undefined,
+    activePlayers: io.engine.clientsCount,
+    activeRooms: rooms.getRoomCount(),
+  }));
 });
 
 if (process.env.NODE_ENV === 'production') {

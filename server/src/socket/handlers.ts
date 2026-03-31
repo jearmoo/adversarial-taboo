@@ -6,14 +6,12 @@ import { registerSetupHandlers } from './setupHandlers';
 import { registerGameHandlers } from './gameHandlers';
 import { registerConnectionHandlers } from './connectionHandlers';
 import { logger } from '../logger';
-import { metrics } from '../metrics';
 
 export function registerHandlers(io: Server, rooms: RoomManager) {
   io.on('connection', (socket) => {
     let playerId: string | null = null;
 
     logger.debug('conn', 'Socket connected', { socketId: socket.id });
-    metrics.playerConnected();
 
     const ctx: SocketContext = {
       io, socket, rooms,

@@ -1,5 +1,4 @@
 import { Room } from './Room';
-import { metrics } from '../metrics';
 
 const CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
 const CODE_LENGTH = 4;
@@ -58,7 +57,6 @@ export class RoomManager {
         this.playerToRoom.delete(pid);
       }
       this.rooms.delete(code);
-      metrics.roomClosed();
     }
   }
 
@@ -69,6 +67,10 @@ export class RoomManager {
         this.deleteRoom(code);
       }
     }
+  }
+
+  getRoomCount(): number {
+    return this.rooms.size;
   }
 
   destroy(): void {

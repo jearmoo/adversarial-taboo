@@ -35,10 +35,6 @@ class MetricsCollector {
   private readonly path: string;
   private flushInterval: ReturnType<typeof setInterval>;
 
-  // Gauges (not persisted — reflect live state)
-  activePlayers = 0;
-  activeRooms = 0;
-
   constructor(filePath: string) {
     this.path = filePath;
     this.data = this.load();
@@ -58,11 +54,6 @@ class MetricsCollector {
   roomCreated(): void {
     this.data.totals.roomsCreated++;
     this.ensureDay().rooms++;
-    this.activeRooms++;
-  }
-
-  roomClosed(): void {
-    this.activeRooms = Math.max(0, this.activeRooms - 1);
   }
 
   gameStarted(): void {
@@ -80,25 +71,22 @@ class MetricsCollector {
     this.ensureDay().players++;
   }
 
-  playerConnected(): void {
-    this.activePlayers++;
-  }
+  getStats(opts: { days?: number; activePlayers?: number; activeRooms?: number } = {}): object {
+    const gauges = {
+      activePlayers: opts.activePlayers ?? 0,
+      activeRooms: opts.activeRooms ?? 0,
+    };
 
-  playerDisconnected(): void {
-    this.activePlayers = Math.max(0, this.activePlayers - 1);
-  }
-
-  getStats(days?: number): object {
-    if (!days) {
+    if (!opts.days) {
       return {
         totals: { ...this.data.totals },
-        gauges: { activePlayers: this.activePlayers, activeRooms: this.activeRooms },
+        gauges,
         daily: { ...this.data.daily },
       };
     }
 
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
+    cutoff.setDate(cutoff.getDate() - opts.days);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
 
     const filtered: Record<string, DailyBucket> = {};
@@ -115,9 +103,9 @@ class MetricsCollector {
     }
 
     return {
-      period: { days, from: cutoffStr, to: this.today() },
+      period: { days: opts.days, from: cutoffStr, to: this.today() },
       aggregated: agg,
-      gauges: { activePlayers: this.activePlayers, activeRooms: this.activeRooms },
+      gauges,
       daily: filtered,
     };
   }
