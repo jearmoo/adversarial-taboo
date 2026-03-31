@@ -73,6 +73,10 @@ export class RoomManager {
     return this.rooms.size;
   }
 
+  getPlayerCount(): number {
+    return this.playerToRoom.size;
+  }
+
   destroy(): void {
     clearInterval(this.cleanupInterval);
   }

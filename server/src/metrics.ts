@@ -1,4 +1,5 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFile } from 'fs/promises';
 import { dirname } from 'path';
 import { logger } from './logger';
 
@@ -33,6 +34,7 @@ function defaultMetrics(): MetricsData {
 class MetricsCollector {
   private data: MetricsData;
   private readonly path: string;
+  private readonly maxDays = 30;
   private flushInterval: ReturnType<typeof setInterval>;
 
   constructor(filePath: string) {
@@ -71,8 +73,9 @@ class MetricsCollector {
     this.ensureDay().players++;
   }
 
-  getStats(opts: { days?: number; activePlayers?: number; activeRooms?: number } = {}): object {
+  getStats(opts: { days?: number; connections?: number; activePlayers?: number; activeRooms?: number } = {}): object {
     const gauges = {
+      connections: opts.connections ?? 0,
       activePlayers: opts.activePlayers ?? 0,
       activeRooms: opts.activeRooms ?? 0,
     };
@@ -119,7 +122,10 @@ class MetricsCollector {
           roomsCreated: parsed.totals?.roomsCreated,
           gamesStarted: parsed.totals?.gamesStarted,
         });
-        return { ...defaultMetrics(), ...parsed };
+        return {
+          totals: { ...defaultMetrics().totals, ...parsed.totals },
+          daily: parsed.daily ?? {},
+        };
       }
     } catch (err) {
       logger.error('metrics', 'Failed to load metrics file, starting fresh', { error: String(err) });
@@ -127,11 +133,21 @@ class MetricsCollector {
     return defaultMetrics();
   }
 
-  flush(): void {
+  private pruneOldDays(): void {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - this.maxDays);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    for (const date of Object.keys(this.data.daily)) {
+      if (date < cutoffStr) delete this.data.daily[date];
+    }
+  }
+
+  async flush(): Promise<void> {
     try {
+      this.pruneOldDays();
       const dir = dirname(this.path);
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-      writeFileSync(this.path, JSON.stringify(this.data, null, 2));
+      await writeFile(this.path, JSON.stringify(this.data, null, 2));
     } catch (err) {
       logger.error('metrics', 'Failed to flush metrics to disk', { error: String(err) });
     }
@@ -139,7 +155,14 @@ class MetricsCollector {
 
   destroy(): void {
     clearInterval(this.flushInterval);
-    this.flush();
+    try {
+      this.pruneOldDays();
+      const dir = dirname(this.path);
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(this.path, JSON.stringify(this.data, null, 2));
+    } catch (err) {
+      logger.error('metrics', 'Failed to flush metrics on destroy', { error: String(err) });
+    }
   }
 }
 

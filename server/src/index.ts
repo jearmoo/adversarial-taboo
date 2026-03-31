@@ -8,6 +8,7 @@ import { logger } from './logger';
 import { metrics } from './metrics';
 
 const PORT = parseInt(process.env.PORT || '4040', 10);
+const METRICS_TOKEN = process.env.METRICS_TOKEN || 'REDACTED_TOKEN';
 const app = express();
 const httpServer = createServer(app);
 
@@ -20,10 +21,17 @@ const io = new Server(httpServer, {
 });
 
 app.get('/api/metrics', (req, res) => {
+  const auth = req.headers.authorization;
+  if (auth !== `Bearer ${METRICS_TOKEN}`) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
   const days = req.query.days ? parseInt(req.query.days as string, 10) : undefined;
   res.json(metrics.getStats({
     days: days && !isNaN(days) ? days : undefined,
-    activePlayers: io.engine.clientsCount,
+    connections: io.engine.clientsCount,
+    activePlayers: rooms.getPlayerCount(),
     activeRooms: rooms.getRoomCount(),
   }));
 });
