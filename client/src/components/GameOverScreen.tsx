@@ -1,5 +1,60 @@
+import { useEffect, useRef } from 'react';
 import { useGameStore, useTeamPlayers, useIsHost } from '../store';
 import { socket } from '../socket';
+
+function Confetti({ color }: { color: 'A' | 'B' }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const colors = color === 'A'
+      ? ['#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe', '#fbbf24']
+      : ['#ef4444', '#f87171', '#fca5a5', '#fecaca', '#fbbf24'];
+
+    const pieces = Array.from({ length: 80 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height - canvas.height,
+      w: Math.random() * 8 + 4,
+      h: Math.random() * 6 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 2,
+      vy: Math.random() * 3 + 2,
+      rot: Math.random() * 360,
+      vr: (Math.random() - 0.5) * 10,
+    }));
+
+    let frame: number;
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const p of pieces) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vr;
+        p.vy += 0.03;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rot * Math.PI) / 180);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      }
+      if (pieces.some(p => p.y < canvas.height + 20)) {
+        frame = requestAnimationFrame(animate);
+      }
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [color]);
+
+  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-20" />;
+}
 
 export default function GameOverScreen() {
   const scores = useGameStore(s => s.scores);
@@ -10,11 +65,12 @@ export default function GameOverScreen() {
 
   return (
     <div className="h-full flex flex-col items-center justify-center p-6 gap-8 animate-fade-in">
-      {/* Background effect */}
+      {/* Background effect + confetti */}
       <div className="fixed inset-0 pointer-events-none">
-        {winner === 'A' && <div className="absolute inset-0 bg-team-a/5" />}
-        {winner === 'B' && <div className="absolute inset-0 bg-team-b/5" />}
+        {winner === 'A' && <div className="absolute inset-0 bg-team-a/15" />}
+        {winner === 'B' && <div className="absolute inset-0 bg-team-b/15" />}
       </div>
+      {winner && <Confetti color={winner} />}
 
       <div className="text-center relative z-10 animate-score-pop">
         <h1 className="font-display text-4xl text-white tracking-wider mb-2"
@@ -58,7 +114,7 @@ export default function GameOverScreen() {
           onClick={() => {
             socket.emit('room:leave');
             useGameStore.getState().reset();
-            localStorage.removeItem('taboo_session');
+            localStorage.removeItem('adtaboo_session');
           }}
           className="w-full py-3 text-gray-500 hover:text-white transition-colors text-sm"
         >

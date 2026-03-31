@@ -80,7 +80,11 @@ export interface GameStore {
   // History
   roundHistory: RoundArchiveEntry[];
 
+  // Error toast
+  error: string | null;
+
   setPlayerName: (name: string) => void;
+  setError: (msg: string | null) => void;
   reset: () => void;
 }
 
@@ -108,11 +112,16 @@ export const initialState = {
   timerEnd: null,
   turnResults: { A: null, B: null },
   roundHistory: [],
+  error: null,
 };
 
 export const useGameStore = create<GameStore>((set) => ({
   ...initialState,
   setPlayerName: (name) => set({ playerName: name }),
+  setError: (msg) => {
+    set({ error: msg });
+    if (msg) setTimeout(() => set({ error: null }), 4000);
+  },
   reset: () => set(initialState),
 }));
 
@@ -139,15 +148,27 @@ export function useMyRole(): 'clue-giver' | 'taboo-master' | 'taboo-watcher' | '
   }
 
   if (!cluingTeam) return null;
-  const opposingTeam = cluingTeam === 'A' ? 'B' : 'A';
 
-  const activeCGId = useGameStore.getState().activeCluingClueGiverId;
+  const activeCGId = useGameStore(s => s.activeCluingClueGiverId);
 
   if (me.team === cluingTeam) {
     return me.id === activeCGId ? 'clue-giver' : 'guesser';
   } else {
     return me.id === tabooMasters[me.team] ? 'taboo-master' : 'taboo-watcher';
   }
+}
+
+export function useLiveScore() {
+  const cards = useGameStore(s => s.cards);
+  const tabooBuzzes = useGameStore(s => s.tabooBuzzes);
+
+  const buzzedWords = Object.entries(tabooBuzzes).filter(([_, c]) => c > 0);
+  const totalBuzzes = buzzedWords.reduce((sum, [_, c]) => sum + c, 0);
+  const correctCount = cards.filter(c => c.result === 'correct').length;
+  const remaining = cards.filter(c => c.result === null).length;
+  const liveScore = correctCount * 3 - totalBuzzes;
+
+  return { correctCount, totalBuzzes, buzzedWords, liveScore, remaining };
 }
 
 export function useIsHost(): boolean {

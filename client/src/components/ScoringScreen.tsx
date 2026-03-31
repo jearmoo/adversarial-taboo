@@ -50,7 +50,7 @@ export default function ScoringScreen() {
         </button>
       )}
       {!host && !isGameOver && (
-        <div className="text-gray-600 text-xs tracking-wider">Waiting for host to continue...</div>
+        <div className="text-gray-600 text-xs tracking-wider animate-pulse-slow">Waiting for host to continue...</div>
       )}
 
       {isGameOver && (

@@ -1,9 +1,8 @@
 import {
   Player, GameState, GamePhase, TeamId,
-  RoomSettings, WordCard, ChallengeSetup, TabooBuzzes,
+  RoomSettings, ChallengeSetup,
   TurnScoreData, TeamRoundData, RoundArchiveEntry, PlayerDTO, RoomDTO,
 } from './types';
-import { logger } from '../logger';
 import { fetchWords } from '../words';
 
 function emptyChallenge(): ChallengeSetup {

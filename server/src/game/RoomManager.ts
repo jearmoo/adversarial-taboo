@@ -1,6 +1,5 @@
 import { writeFileSync, readFileSync, existsSync, unlinkSync, renameSync } from 'fs';
 import { Room } from './Room';
-import { GamePhase, TeamId } from './types';
 import { logger } from '../logger';
 
 const CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
@@ -28,7 +27,9 @@ export class RoomManager {
     if (this.rooms.size > 0) {
       this.save(this.snapshotPath);
     } else if (existsSync(this.snapshotPath)) {
-      try { unlinkSync(this.snapshotPath); } catch {}
+      try { unlinkSync(this.snapshotPath); } catch (err) {
+        logger.warn('rooms', 'Failed to delete empty snapshot', { error: String(err) });
+      }
     }
   }
 
@@ -134,7 +135,8 @@ export class RoomManager {
             if (remaining > 0) {
               room.restoreTimer(remaining, () => onTimerExpired(room, cluingTeam));
             } else {
-              onTimerExpired(room, cluingTeam);
+              // Timer expired during restart — delay to allow clients to reconnect first
+              room.restoreTimer(3000, () => onTimerExpired(room, cluingTeam));
             }
           }
         }
@@ -146,8 +148,12 @@ export class RoomManager {
         });
 
         // Clean up both files after successful restore
-        try { unlinkSync(filePath); } catch {}
-        try { unlinkSync(filePath + '.tmp'); } catch {}
+        try { unlinkSync(filePath); } catch (err) {
+          logger.warn('rooms', 'Failed to delete restored file', { file: filePath, error: String(err) });
+        }
+        try { unlinkSync(filePath + '.tmp'); } catch (err) {
+          logger.warn('rooms', 'Failed to delete tmp file', { file: filePath + '.tmp', error: String(err) });
+        }
         return;
       } catch (err) {
         logger.error('rooms', 'Failed to restore from file', { file: candidate, error: String(err) });

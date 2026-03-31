@@ -1,14 +1,25 @@
 {
   "name": "adversarial-taboo",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
     "build": "cd client && npm run build && cd ../server && npm run build",
-    "start": "cd server && npm start"
+    "start": "cd server && npm start",
+    "lint": "eslint \"client/src/**/*.ts\" \"client/src/**/*.tsx\" \"server/src/**/*.ts\"",
+    "format": "prettier --write \"client/src/**/*.{ts,tsx}\" \"server/src/**/*.ts\"",
+    "format:check": "prettier --check \"client/src/**/*.{ts,tsx}\" \"server/src/**/*.ts\"",
+    "test": "cd server && npm test",
+    "typecheck": "cd client && npx tsc --noEmit && cd ../server && npx tsc --noEmit"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^9.1.0",
+    "eslint": "^10.1.0",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "typescript-eslint": "^8.58.0"
   }
 }

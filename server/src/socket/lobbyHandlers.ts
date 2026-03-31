@@ -1,4 +1,6 @@
 import { GamePhase, TeamId } from '../game/types';
+import { Room } from '../game/Room';
+import { Server } from 'socket.io';
 import { SocketContext, buildGameState } from './context';
 import { logger } from '../logger';
 import { metrics } from '../metrics';
@@ -98,7 +100,6 @@ export function registerLobbyHandlers(ctx: SocketContext) {
     const room = rooms.getRoomForPlayer(playerId);
     if (!room) return;
     if (room.setTabooMaster(team, masterId)) {
-      if (room.game) room.game.tabooMasters[team] = masterId;
       io.to(room.code).emit('taboo-master:updated', { tabooMasters: room.tabooMasters });
       const masterName = room.getPlayer(masterId)?.name;
       logger.info('room', 'Taboo master set', { room: room.code, team, master: masterName });
@@ -154,18 +155,15 @@ export function registerLobbyHandlers(ctx: SocketContext) {
   });
 }
 
-export function emitSetupCards(room: any, io: any) {
+export function emitSetupCards(room: Room, io: Server) {
   if (!room.game) return;
-  for (const p of room.getTeamPlayers('A')) {
-    io.to(p.socketId).emit('setup:cards-updated', {
-      forTeam: 'B',
-      cards: room.game.challenges.B.cards.map((c: any) => ({ word: c.word, result: c.result })),
-    });
-  }
-  for (const p of room.getTeamPlayers('B')) {
-    io.to(p.socketId).emit('setup:cards-updated', {
-      forTeam: 'A',
-      cards: room.game.challenges.A.cards.map((c: any) => ({ word: c.word, result: c.result })),
-    });
+  for (const team of ['A', 'B'] as TeamId[]) {
+    const opposing = room.getOpposingTeam(team);
+    for (const p of room.getTeamPlayers(team)) {
+      io.to(p.socketId).emit('setup:cards-updated', {
+        forTeam: opposing,
+        cards: room.game.challenges[opposing].cards.map(c => ({ word: c.word, result: c.result })),
+      });
+    }
   }
 }

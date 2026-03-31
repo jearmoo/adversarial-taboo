@@ -1,21 +1,14 @@
-import { useGameStore, useMyPlayer } from '../store';
+import { useGameStore, useLiveScore } from '../store';
 import Timer from './Timer';
 
 export default function GuesserScreen() {
-  const phase = useGameStore(s => s.phase);
   const cards = useGameStore(s => s.cards);
   const timerEnd = useGameStore(s => s.timerEnd);
-  const scores = useGameStore(s => s.scores);
   const cluingTeam = useGameStore(s => s.cluingTeam);
-  const tabooBuzzes = useGameStore(s => s.tabooBuzzes);
-  const players = useGameStore(s => s.players);
-  const me = useMyPlayer();
+  const settings = useGameStore(s => s.settings);
 
+  const { totalBuzzes, buzzedWords, liveScore, remaining } = useLiveScore();
   const correctCards = cards.filter(c => c.result === 'correct');
-  const remaining = cards.filter(c => c.result === null).length;
-  const buzzedWords = Object.entries(tabooBuzzes).filter(([_, c]) => c > 0);
-  const totalBuzzes = buzzedWords.reduce((sum, [_, c]) => sum + c, 0);
-  const liveScore = correctCards.length * 3 - totalBuzzes;
 
   if (!timerEnd) {
     return (
@@ -32,11 +25,13 @@ export default function GuesserScreen() {
 
   return (
     <div className="h-full flex flex-col items-center justify-center p-6 gap-6 animate-fade-in">
-      {timerEnd && <Timer endTime={timerEnd} />}
-
-      <div className="text-right">
-        <div className={`font-display text-3xl ${liveScore >= 0 ? 'text-emerald-400' : 'text-team-b-glow'}`}>
-          {liveScore >= 0 ? '+' : ''}{liveScore}
+      <div className="flex items-start justify-between">
+        <div className="flex-1">{timerEnd && <Timer endTime={timerEnd} duration={settings.timerSeconds} />}</div>
+        <div className="text-right ml-4">
+          <div className="text-[10px] uppercase tracking-wider text-gray-500">Score</div>
+          <div className={`font-display text-2xl ${liveScore >= 0 ? 'text-emerald-400' : 'text-team-b-glow'}`}>
+            {liveScore >= 0 ? '+' : ''}{liveScore}
+          </div>
         </div>
       </div>
 

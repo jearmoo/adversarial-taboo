@@ -28,7 +28,7 @@ export default {
         'glow-b': 'glow-b 2s ease-in-out infinite alternate',
         'slide-up': 'slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
         'fade-in': 'fade-in 0.3s ease-out',
-        'buzz-shake': 'buzz-shake 0.3s ease-in-out',
+        'buzz-shake': 'buzz-shake 0.5s ease-in-out infinite',
         'score-pop': 'score-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
       },
       keyframes: {

@@ -22,6 +22,15 @@ const io = new Server(httpServer, {
   transports: ['websocket', 'polling'],
 });
 
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    rooms: rooms.getRoomCount(),
+    players: rooms.getPlayerCount(),
+  });
+});
+
 app.get('/api/metrics', (req, res) => {
   const auth = req.headers.authorization;
   if (auth !== `Bearer ${METRICS_TOKEN}`) {

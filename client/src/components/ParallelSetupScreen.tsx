@@ -21,15 +21,11 @@ export default function ParallelSetupScreen() {
   const teamPlayers = useTeamPlayers(myTeam || 'A');
   const wordsLoading = challengeCards.length === 0;
 
-  const myStatus = myTeam ? setupStatus[myTeam] : null;
-  const otherStatus = opposingTeam ? setupStatus[opposingTeam] : null;
-  // "My team's challenge" readiness = the challenge FOR my team, created BY opposing team
-  // "Other team's setup" = what the opposing team is doing (creating challenge for us)
-  // But setupStatus[X] tracks the challenge FOR team X
-  // So setupStatus[myTeam] = readiness of challenge FOR my team (created by other team)
-  // And setupStatus[opposingTeam] = readiness of challenge FOR other team (created by my team)
-  const myChallengeReady = myTeam ? setupStatus[opposingTeam!] : null; // challenge I'm creating
-  const otherChallengeStatus = myTeam ? setupStatus[myTeam!] : null; // challenge they're creating for me
+  // setupStatus[X] = readiness of challenge FOR team X
+  // "I'm creating" = challenge FOR the opposing team = setupStatus[opposingTeam]
+  // "They're creating for me" = challenge FOR my team = setupStatus[myTeam]
+  const challengeIAmCreating = myTeam ? setupStatus[opposingTeam!] : null;
+  const challengeForMyTeam = myTeam ? setupStatus[myTeam!] : null;
 
   const clueGiverName = ownClueGiverId ? teamPlayers.find(p => p.id === ownClueGiverId)?.name : null;
 
@@ -48,7 +44,7 @@ export default function ParallelSetupScreen() {
   };
 
   const canLockIn = tabooSuggestions.length >= 1 && ownClueGiverId !== null;
-  const isLocked = myChallengeReady?.ready ?? false;
+  const isLocked = challengeIAmCreating?.ready ?? false;
 
   return (
     <div className="h-full flex flex-col p-4 gap-3 animate-fade-in">
@@ -60,10 +56,9 @@ export default function ParallelSetupScreen() {
 
       {/* Other team's status (collapsible) */}
       <OtherTeamStatus
-        opposingTeam={opposingTeam}
-        ready={otherChallengeStatus?.ready ?? false}
-        tabooCount={otherChallengeStatus?.tabooCount ?? 0}
-        hasClueGiver={myChallengeReady?.hasClueGiver ?? false}
+        ready={challengeForMyTeam?.ready ?? false}
+        tabooCount={challengeForMyTeam?.tabooCount ?? 0}
+        hasClueGiver={challengeIAmCreating?.hasClueGiver ?? false}
       />
 
       {/* Pick clue-giver for own team */}
@@ -173,7 +168,7 @@ export default function ParallelSetupScreen() {
 
       {/* Lock in / Unlock */}
       {isTM ? (
-        myChallengeReady?.ready ? (
+        challengeIAmCreating?.ready ? (
           <button onClick={() => socket.emit('setup:unconfirm')}
             className="w-full py-4 bg-surface-raised hover:bg-surface-hover border border-emerald-500/30
                        rounded-2xl text-emerald-400 font-display text-lg tracking-wider
@@ -204,8 +199,7 @@ export default function ParallelSetupScreen() {
 }
 
 
-function OtherTeamStatus({ opposingTeam, ready, tabooCount, hasClueGiver }: {
-  opposingTeam: string;
+function OtherTeamStatus({ ready, tabooCount, hasClueGiver }: {
   ready: boolean;
   tabooCount: number;
   hasClueGiver: boolean;

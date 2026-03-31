@@ -40,6 +40,7 @@ export default function ScoreBoard() {
               onClick={() => setHistoryOpen(true)}
               className="w-5 h-5 flex items-center justify-center rounded text-[10px] text-gray-500 hover:text-accent hover:bg-white/5 transition-colors"
               title="Round History"
+              aria-label="Round History"
             >
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="8" cy="8" r="6.5" />
@@ -66,7 +67,7 @@ export default function ScoreBoard() {
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-4 py-2"
       >
-        <div className={`flex items-center gap-2 ${cluingTeam === 'A' ? '' : cluingTeam ? 'opacity-50' : ''}`}>
+        <div className={`flex items-center gap-2 ${cluingTeam && cluingTeam !== 'A' ? 'opacity-50' : ''}`}>
           <div className="w-2.5 h-2.5 rounded-full bg-team-a shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
           <span className="text-team-a-glow font-display text-sm tracking-wider">A: {scores.A}</span>
         </div>
@@ -77,7 +78,7 @@ export default function ScoreBoard() {
            `R${round}/${settings.rounds}`}
           <span className="ml-1.5 text-gray-700">{expanded ? '\u25B2' : '\u25BC'}</span>
         </div>
-        <div className={`flex items-center gap-2 ${cluingTeam === 'B' ? '' : cluingTeam ? 'opacity-50' : ''}`}>
+        <div className={`flex items-center gap-2 ${cluingTeam && cluingTeam !== 'B' ? 'opacity-50' : ''}`}>
           <span className="text-team-b-glow font-display text-sm tracking-wider">B: {scores.B}</span>
           <div className="w-2.5 h-2.5 rounded-full bg-team-b shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
         </div>
@@ -86,9 +87,9 @@ export default function ScoreBoard() {
       {expanded && (
         <div className="flex gap-3 px-4 pb-3 animate-slide-up">
           <RosterColumn team="A" players={teamA} myId={me?.id ?? null}
-            tabooMasterId={tabooMasters.A} hostId={hostId} />
+            tabooMasterId={tabooMasters.A} hostId={hostId} phase={phase} />
           <RosterColumn team="B" players={teamB} myId={me?.id ?? null}
-            tabooMasterId={tabooMasters.B} hostId={hostId} />
+            tabooMasterId={tabooMasters.B} hostId={hostId} phase={phase} />
         </div>
       )}
 
@@ -99,12 +100,13 @@ export default function ScoreBoard() {
 }
 
 
-function RosterColumn({ team, players, myId, tabooMasterId, hostId }: {
+function RosterColumn({ team, players, myId, tabooMasterId, hostId, phase }: {
   team: 'A' | 'B';
   players: Array<{ id: string; name: string; connected: boolean }>;
   myId: string | null;
   tabooMasterId: string | null;
   hostId: string | null;
+  phase: string | null;
 }) {
   const borderColor = team === 'A' ? 'border-team-a/20' : 'border-team-b/20';
   const textColor = team === 'A' ? 'text-team-a-glow' : 'text-team-b-glow';
@@ -128,7 +130,7 @@ function RosterColumn({ team, players, myId, tabooMasterId, hostId }: {
               {isTM && <span className="text-accent text-[9px] ml-1">TM</span>}
               {isHost && <span className="text-indigo-400 text-[9px] ml-1">H</span>}
             </span>
-            {isOnTeam && !isTM && p.connected && (
+            {isOnTeam && !isTM && p.connected && (!phase || phase === 'LOBBY' || phase === 'ROUND_RESULT') && (
               <button
                 onClick={(e) => { e.stopPropagation(); socket.emit('taboo-master:set', { team, masterId: p.id }); }}
                 className="text-[9px] text-gray-600 hover:text-accent transition-colors">

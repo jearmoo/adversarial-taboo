@@ -1,20 +1,17 @@
-import { useGameStore } from '../store';
+import { useState } from 'react';
+import { useGameStore, useLiveScore } from '../store';
 import { socket } from '../socket';
 import Timer from './Timer';
 
 export default function ClueGiverScreen() {
   const cards = useGameStore(s => s.cards);
   const timerEnd = useGameStore(s => s.timerEnd);
-  const scores = useGameStore(s => s.scores);
   const cluingTeam = useGameStore(s => s.cluingTeam);
-  const tabooBuzzes = useGameStore(s => s.tabooBuzzes);
   const settings = useGameStore(s => s.settings);
 
-  const buzzedWords = Object.entries(tabooBuzzes).filter(([_, c]) => c > 0);
-  const totalBuzzes = buzzedWords.reduce((sum, [_, c]) => sum + c, 0);
-  const correctCount = cards.filter(c => c.result === 'correct').length;
-  const liveScore = correctCount * 3 - totalBuzzes;
+  const { buzzedWords, totalBuzzes, liveScore } = useLiveScore();
   const timerNotStarted = timerEnd === null;
+  const [beginning, setBeginning] = useState(false);
 
   // Before timer starts: don't show words yet
   if (timerNotStarted) {
@@ -38,10 +35,11 @@ export default function ClueGiverScreen() {
           </p>
         </div>
 
-        <button onClick={() => socket.emit('clue:begin')}
+        <button onClick={() => { setBeginning(true); socket.emit('clue:begin'); }}
+          disabled={beginning}
           className="btn-success w-full max-w-sm py-5 rounded-2xl text-white font-display text-xl
-                     tracking-wider transition-all active:scale-[0.97]">
-          Begin Cluing
+                     tracking-wider transition-all active:scale-[0.97] disabled:opacity-50">
+          {beginning ? 'Starting...' : 'Begin Cluing'}
         </button>
       </div>
     );
@@ -51,7 +49,7 @@ export default function ClueGiverScreen() {
     <div className="h-full flex flex-col p-4 gap-3 animate-fade-in">
       {/* Timer + live score */}
       <div className="flex items-start justify-between">
-        <div className="flex-1">{timerEnd && <Timer endTime={timerEnd} />}</div>
+        <div className="flex-1">{timerEnd && <Timer endTime={timerEnd} duration={settings.timerSeconds} />}</div>
         <div className="text-right ml-4">
           <div className="text-[10px] uppercase tracking-wider text-gray-500">Score</div>
           <div className={`font-display text-2xl ${liveScore >= 0 ? 'text-emerald-400' : 'text-team-b-glow'}`}>
@@ -66,11 +64,15 @@ export default function ClueGiverScreen() {
 
       {/* 5 word cards */}
       <div className="flex-1 overflow-auto space-y-2">
-        {cards.map((card, i) => (
+        {cards.map((card, i) => {
+          const isFirstPending = card.result === null && !cards.slice(0, i).some(c => c.result === null);
+          return (
           <div key={i} className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
             card.result === 'correct'
               ? 'bg-emerald-500/10 border-emerald-500/30'
-              : 'glass-card border-white/5'
+              : isFirstPending
+                ? 'glass-card border-accent/30 shadow-[0_0_12px_rgba(251,191,36,0.1)]'
+                : 'glass-card border-white/5'
           }`}>
             <div className="flex items-center gap-3">
               {card.result === 'correct' && <span className="text-emerald-400 font-display">✓</span>}
@@ -95,7 +97,8 @@ export default function ClueGiverScreen() {
               </button>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Buzzed taboo words */}

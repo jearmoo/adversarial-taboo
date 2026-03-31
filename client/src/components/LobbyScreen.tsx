@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useGameStore, useIsHost, useMyPlayer } from '../store';
 import { socket } from '../socket';
 
@@ -7,6 +7,7 @@ export default function LobbyScreen() {
   const players = useGameStore(s => s.players);
   const settings = useGameStore(s => s.settings);
   const tabooMasters = useGameStore(s => s.tabooMasters);
+  const hostId = useGameStore(s => s.hostId);
   const host = useIsHost();
   const me = useMyPlayer();
 
@@ -14,11 +15,19 @@ export default function LobbyScreen() {
   const teamB = players.filter(p => p.team === 'B');
   const unassigned = players.filter(p => !p.team);
   const canStart = teamA.length >= 2 && teamB.length >= 2 && !!tabooMasters.A && !!tabooMasters.B;
+  const [starting, setStarting] = useState(false);
 
   const [timerInput, setTimerInput] = useState(String(settings.timerSeconds));
   useEffect(() => { setTimerInput(String(settings.timerSeconds)); }, [settings.timerSeconds]);
 
   const shareUrl = `${window.location.origin}/${roomCode}`;
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    navigator.clipboard?.writeText(shareUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [shareUrl]);
 
   return (
     <div className="h-full flex flex-col p-4 gap-3 animate-fade-in">
@@ -30,26 +39,26 @@ export default function LobbyScreen() {
           {roomCode}
         </div>
         <button
-          onClick={() => navigator.clipboard?.writeText(shareUrl)}
+          onClick={handleCopy}
           className="text-indigo-400 text-xs mt-1 hover:text-indigo-300 transition-colors">
-          Copy link
+          {copied ? 'Copied!' : 'Copy link'}
         </button>
       </div>
 
       {/* Teams */}
       <div className="flex gap-3 flex-1 min-h-0">
         <TeamColumn team="A" variant="a" players={teamA} myId={me?.id ?? null}
-          tabooMasterId={tabooMasters.A} hostId={useGameStore.getState().hostId}
+          tabooMasterId={tabooMasters.A} hostId={hostId}
           onJoin={() => socket.emit('team:join', { team: 'A' })}
           onSetMaster={(id) => socket.emit('taboo-master:set', { team: 'A', masterId: id })} />
         <TeamColumn team="B" variant="b" players={teamB} myId={me?.id ?? null}
-          tabooMasterId={tabooMasters.B} hostId={useGameStore.getState().hostId}
+          tabooMasterId={tabooMasters.B} hostId={hostId}
           onJoin={() => socket.emit('team:join', { team: 'B' })}
           onSetMaster={(id) => socket.emit('taboo-master:set', { team: 'B', masterId: id })} />
       </div>
 
       {unassigned.length > 0 && (
-        <div className="text-center text-gray-600 text-xs">
+        <div className="text-center text-amber-400/80 text-xs font-medium">
           Unassigned: {unassigned.map(p => p.name).join(', ')}
         </div>
       )}
@@ -109,12 +118,13 @@ export default function LobbyScreen() {
 
       {/* Start */}
       {host && (
-        <button onClick={() => socket.emit('game:start')} disabled={!canStart}
+        <button onClick={() => { setStarting(true); socket.emit('game:start'); setTimeout(() => setStarting(false), 5000); }}
+          disabled={!canStart || starting}
           className={`w-full py-4 rounded-2xl font-display text-lg tracking-wider transition-all active:scale-[0.97]
-            ${canStart ? 'btn-success text-white' : 'bg-surface-raised text-gray-600 border border-white/5'}`}>
+            ${canStart && !starting ? 'btn-success text-white' : 'bg-surface-raised text-gray-600 border border-white/5'}`}>
           {!canStart
             ? (!tabooMasters.A || !tabooMasters.B ? 'Each team needs a taboo master' : 'Need 2+ per team')
-            : 'Start Game'}
+            : starting ? 'Starting...' : 'Start Game'}
         </button>
       )}
       {!host && (

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export default function Timer({ endTime }: { endTime: number }) {
+export default function Timer({ endTime, duration = 60 }: { endTime: number; duration?: number }) {
   const [remaining, setRemaining] = useState(() => Math.max(0, Math.ceil((endTime - Date.now()) / 1000)));
 
   useEffect(() => {
@@ -13,12 +13,17 @@ export default function Timer({ endTime }: { endTime: number }) {
   }, [endTime]);
 
   const isLow = remaining <= 10;
-  const pct = Math.min(100, (remaining / 60) * 100);
+  const isCritical = remaining <= 5;
+  const isFinal = remaining <= 3;
+  const pct = Math.min(100, (remaining / duration) * 100);
 
   return (
     <div className="w-full">
       <div className={`text-center font-display text-5xl tracking-wider ${
-        isLow ? 'text-team-b-glow animate-pulse' : 'text-white'
+        isFinal ? 'text-team-b-glow animate-buzz-shake'
+        : isCritical ? 'text-team-b-glow animate-pulse'
+        : isLow ? 'text-team-b-glow animate-pulse-slow'
+        : 'text-white'
       }`}>
         {remaining}
       </div>

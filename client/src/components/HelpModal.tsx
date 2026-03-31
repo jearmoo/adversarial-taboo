@@ -9,6 +9,7 @@ export function HelpButton({ className }: { className?: string }) {
         onClick={() => setOpen(true)}
         className={className ?? "w-5 h-5 flex items-center justify-center rounded text-[10px] text-gray-500 hover:text-accent hover:bg-white/5 transition-colors font-semibold"}
         title="How to Play"
+        aria-label="How to Play"
       >
         ?
       </button>
@@ -19,12 +20,12 @@ export function HelpButton({ className }: { className?: string }) {
 
 export default function HelpModal({ onClose }: { onClose: () => void }) {
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="How to Play" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative glass-card rounded-2xl border border-white/10 max-w-sm w-full max-h-[80vh] overflow-auto p-5 animate-fade-in"
            onClick={e => e.stopPropagation()}>
-        <button onClick={onClose}
-          className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center rounded-full text-gray-500 hover:text-white hover:bg-white/10 transition-colors text-xs">
+        <button onClick={onClose} aria-label="Close help"
+          className="absolute top-3 right-3 w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:text-white hover:bg-white/10 transition-colors text-base">
           &times;
         </button>
 

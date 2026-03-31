@@ -4,7 +4,7 @@ export default function HistoryPanel({ onClose }: { onClose: () => void }) {
   const roundHistory = useGameStore(s => s.roundHistory);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-label="Round History" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
         className="relative glass-card rounded-t-2xl sm:rounded-2xl border border-white/10 w-full sm:max-w-md max-h-[85vh] overflow-hidden flex flex-col animate-slide-up"
@@ -20,6 +20,7 @@ export default function HistoryPanel({ onClose }: { onClose: () => void }) {
           </div>
           <button
             onClick={onClose}
+            aria-label="Close history"
             className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 hover:text-white hover:bg-white/10 transition-colors text-sm"
           >
             &times;

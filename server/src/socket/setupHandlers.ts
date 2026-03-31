@@ -1,4 +1,6 @@
 import { GamePhase, TeamId } from '../game/types';
+import { Room } from '../game/Room';
+import { Server } from 'socket.io';
 import { SocketContext } from './context';
 import { logger } from '../logger';
 
@@ -119,9 +121,15 @@ export function registerSetupHandlers(ctx: SocketContext) {
     const player = room.getPlayer(playerId);
     if (!player?.team || playerId !== room.tabooMasters[player.team]) return;
 
-    // Also need clue-giver for own team
-    if (!room.game.challenges[player.team].clueGiverId) {
+    // Also need clue-giver for own team — and they must still be connected
+    const clueGiverId = room.game.challenges[player.team].clueGiverId;
+    if (!clueGiverId) {
       socket.emit('room:error', { message: 'Pick your team\'s clue-giver first' });
+      return;
+    }
+    const clueGiver = room.getPlayer(clueGiverId);
+    if (!clueGiver?.connected) {
+      socket.emit('room:error', { message: 'Your clue-giver has disconnected — pick a new one' });
       return;
     }
 
@@ -159,37 +167,39 @@ export function registerSetupHandlers(ctx: SocketContext) {
 }
 
 // Shared: prepare a cluing phase (no timer — clue-giver presses "Begin" to start)
-export function prepareCluingPhase(room: any, team: 'A' | 'B', io: any) {
+export function prepareCluingPhase(room: Room, team: TeamId, io: Server) {
+  if (!room.game) return;
   const opposingTeam = room.getOpposingTeam(team);
   const challenge = room.game.challenges[team];
 
   room.prepareCluingPhase(team);
 
-  // Send role-appropriate data with timerEnd: null (timer not started yet)
-  const clueGiver = room.getPlayer(challenge.clueGiverId);
+  const basePayload = {
+    clueGiverId: challenge.clueGiverId,
+    timerEnd: null, phase: room.game.phase, team,
+  };
+  const realCards = challenge.cards.map(c => ({ word: c.word, result: c.result }));
+  const maskedCards = challenge.cards.map(c => ({ word: '???', result: c.result }));
+
+  // Clue-giver: sees real words, no taboo info
+  const clueGiver = challenge.clueGiverId ? room.getPlayer(challenge.clueGiverId) : null;
   if (clueGiver) {
     io.to(clueGiver.socketId).emit('clue:start', {
-      clueGiverId: challenge.clueGiverId,
-      timerEnd: null, phase: room.game.phase, team,
-      cards: challenge.cards.map((c: any) => ({ word: c.word, result: c.result })),
-      tabooWords: [], tabooBuzzes: {},
+      ...basePayload, cards: realCards, tabooWords: [], tabooBuzzes: {},
     });
   }
 
-  for (const p of room.getTeamPlayers(team).filter((p: any) => p.id !== challenge.clueGiverId)) {
+  // Same-team guessers: masked words, no taboo info
+  for (const p of room.getTeamPlayers(team).filter(p => p.id !== challenge.clueGiverId)) {
     io.to(p.socketId).emit('clue:start', {
-      clueGiverId: challenge.clueGiverId,
-      timerEnd: null, phase: room.game.phase, team,
-      cards: challenge.cards.map((c: any) => ({ word: '???', result: c.result })),
-      tabooWords: [], tabooBuzzes: {},
+      ...basePayload, cards: maskedCards, tabooWords: [], tabooBuzzes: {},
     });
   }
 
+  // Opposing team: real words + taboo info
   for (const p of room.getTeamPlayers(opposingTeam)) {
     io.to(p.socketId).emit('clue:start', {
-      clueGiverId: challenge.clueGiverId,
-      timerEnd: null, phase: room.game.phase, team,
-      cards: challenge.cards.map((c: any) => ({ word: c.word, result: c.result })),
+      ...basePayload, cards: realCards,
       tabooWords: challenge.tabooWords, tabooBuzzes: challenge.tabooBuzzes,
     });
   }

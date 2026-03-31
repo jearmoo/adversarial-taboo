@@ -1,4 +1,4 @@
-import { useGameStore } from '../store';
+import { useGameStore, useLiveScore } from '../store';
 import { socket } from '../socket';
 import Timer from './Timer';
 
@@ -7,12 +7,10 @@ export default function TabooWatcherScreen({ isMaster }: { isMaster: boolean }) 
   const tabooWords = useGameStore(s => s.tabooWords);
   const tabooBuzzes = useGameStore(s => s.tabooBuzzes);
   const timerEnd = useGameStore(s => s.timerEnd);
-  const scores = useGameStore(s => s.scores);
   const cluingTeam = useGameStore(s => s.cluingTeam);
+  const settings = useGameStore(s => s.settings);
 
-  const totalBuzzes = Object.values(tabooBuzzes).reduce((sum, c) => sum + c, 0);
-  const correctCount = cards.filter(c => c.result === 'correct').length;
-  const liveScore = correctCount * 3 - totalBuzzes;
+  const { totalBuzzes, liveScore } = useLiveScore();
 
   if (!timerEnd) {
     return (
@@ -31,7 +29,7 @@ export default function TabooWatcherScreen({ isMaster }: { isMaster: boolean }) 
     <div className="h-full flex flex-col p-4 gap-3 animate-fade-in">
       {/* Timer + score */}
       <div className="flex items-start justify-between">
-        <div className="flex-1">{timerEnd && <Timer endTime={timerEnd} />}</div>
+        <div className="flex-1">{timerEnd && <Timer endTime={timerEnd} duration={settings.timerSeconds} />}</div>
         <div className="text-right ml-4">
           <div className="text-[10px] uppercase tracking-wider text-gray-500">Their Score</div>
           <div className={`font-display text-2xl ${liveScore >= 0 ? 'text-emerald-400' : 'text-team-b-glow'}`}>
@@ -78,7 +76,7 @@ export default function TabooWatcherScreen({ isMaster }: { isMaster: boolean }) 
                 <div key={word} className="flex items-center gap-0.5">
                   <button
                     onClick={() => socket.emit('taboo:buzz', { tabooWord: word })}
-                    className={`px-3 py-2 rounded-l-xl text-sm font-medium transition-all active:scale-[0.95] border ${
+                    className={`px-3 py-2 min-h-[44px] rounded-l-xl text-sm font-medium transition-all active:scale-[0.95] border ${
                       isBuzzed
                         ? 'bg-team-b/30 text-team-b-glow border-team-b/40'
                         : 'bg-team-b/10 text-team-b-glow/80 border-team-b/20 hover:bg-team-b/20'
@@ -89,7 +87,7 @@ export default function TabooWatcherScreen({ isMaster }: { isMaster: boolean }) 
                   {isBuzzed && (
                     <button
                       onClick={() => socket.emit('taboo:undo-buzz', { tabooWord: word })}
-                      className="px-2 py-2 rounded-r-xl bg-surface-raised text-gray-500 hover:text-white text-xs border border-white/10 transition-colors">
+                      className="px-2 py-2 min-h-[44px] rounded-r-xl bg-surface-raised text-gray-500 hover:text-white text-xs border border-white/10 transition-colors">
                       −
                     </button>
                   )}
@@ -99,7 +97,7 @@ export default function TabooWatcherScreen({ isMaster }: { isMaster: boolean }) 
             }
 
             return (
-              <span key={word} className={`px-3 py-2 rounded-xl text-sm font-medium border ${
+              <span key={word} className={`px-3 py-2 min-h-[44px] flex items-center rounded-xl text-sm font-medium border ${
                 isBuzzed
                   ? 'bg-team-b/20 text-team-b-glow border-team-b/30'
                   : 'bg-team-b/10 text-team-b-glow/60 border-team-b/15'

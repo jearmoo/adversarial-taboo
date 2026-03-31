@@ -1,12 +1,15 @@
-import { GamePhase } from '../game/types';
+import { GamePhase, TeamId } from '../game/types';
+import { Room } from '../game/Room';
+import { Server } from 'socket.io';
 import { SocketContext } from './context';
 import { logger } from '../logger';
 import { metrics } from '../metrics';
 import { prepareCluingPhase } from './setupHandlers';
 import { emitSetupCards } from './lobbyHandlers';
 
-export function handleTurnEnd(room: any, team: 'A' | 'B', io: any) {
+export function handleTurnEnd(room: Room, team: TeamId, io: Server) {
   const result = room.endCluing();
+  if (!room.game) return;
   logger.info('game', 'Cluing ended', { room: room.code, team, turnScore: result.turnScore });
 
   if (result.nextPhase === GamePhase.CLUING_B) {
@@ -45,6 +48,7 @@ export function registerGameHandlers(ctx: SocketContext) {
   });
 
   socket.on('clue:got-it', ({ cardIndex }: { cardIndex: number }) => {
+    if (typeof cardIndex !== 'number' || !Number.isInteger(cardIndex) || cardIndex < 0) return;
     const playerId = ctx.getPlayerId();
     if (!playerId) return;
     const room = rooms.getRoomForPlayer(playerId);

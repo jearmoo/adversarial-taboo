@@ -19,6 +19,6 @@ socket.on('connect', () => {
       if (roomCode && playerId && playerName) {
         socket.emit('room:join', { roomCode, playerName, sessionId: playerId });
       }
-    } catch {}
+    } catch (_e) { /* corrupt session data */ }
   }
 });

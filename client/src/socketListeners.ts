@@ -36,7 +36,7 @@ socket.on('room:joined', ({ roomCode, playerId, room }) => {
 });
 
 socket.on('room:rejoined', ({ roomCode, playerId, room, game }) => {
-  const update: any = {
+  const update: Record<string, unknown> = {
     roomCode, playerId, hostId: room.hostId,
     players: room.players, settings: room.settings,
     tabooMasters: room.tabooMasters, phase: room.phase || 'LOBBY',
@@ -49,7 +49,7 @@ socket.on('room:rejoined', ({ roomCode, playerId, room, game }) => {
     update.turnResults = game.turnResults;
     if (game.roundHistory) update.roundHistory = game.roundHistory;
 
-    const me = room.players.find((p: any) => p.id === playerId);
+    const me = room.players.find((p: { id: string; team: string | null }) => p.id === playerId);
     const myTeam = me?.team as 'A' | 'B' | null;
 
     if (myTeam && game.phase === 'PARALLEL_SETUP') {
@@ -58,7 +58,7 @@ socket.on('room:rejoined', ({ roomCode, playerId, room, game }) => {
       const challengeForOpposing = game.challenges[opposingTeam];
       const challengeForMyTeam = game.challenges[myTeam];
 
-      update.challengeCards = challengeForOpposing.cards.map((c: any) => ({ word: c.word, result: c.result }));
+      update.challengeCards = challengeForOpposing.cards.map((c: { word: string; result: string | null }) => ({ word: c.word, result: c.result }));
       update.tabooSuggestions = challengeForOpposing.tabooSuggestions;
       update.ownClueGiverId = challengeForMyTeam.clueGiverId;
       update.setupStatus = {
@@ -84,13 +84,13 @@ socket.on('room:rejoined', ({ roomCode, playerId, room, game }) => {
 
       if (myTeam === cluingTeam) {
         const isClueGiver = playerId === challenge.clueGiverId;
-        update.cards = challenge.cards.map((c: any) => ({
+        update.cards = challenge.cards.map((c: { word: string; result: string | null }) => ({
           word: isClueGiver ? c.word : '???',
           result: c.result,
         }));
         update.tabooWords = [];
       } else {
-        update.cards = challenge.cards.map((c: any) => ({ word: c.word, result: c.result }));
+        update.cards = challenge.cards.map((c: { word: string; result: string | null }) => ({ word: c.word, result: c.result }));
         update.tabooWords = challenge.tabooWords;
       }
     }
@@ -125,7 +125,10 @@ socket.on('room:host-updated', ({ hostId }) => {
 socket.on('team:updated', ({ players }) => { useGameStore.setState({ players }); });
 socket.on('settings:updated', ({ settings }) => { useGameStore.setState({ settings }); });
 socket.on('taboo-master:updated', ({ tabooMasters }) => { useGameStore.setState({ tabooMasters }); });
-socket.on('room:error', ({ message }) => { console.error('Room error:', message); });
+socket.on('room:error', ({ message }) => {
+  console.error('Room error:', message);
+  useGameStore.getState().setError(message);
+});
 
 // --- Parallel Setup ---
 socket.on('setup:started', ({ phase, round, scores, challengeCards, tabooMasters }) => {
@@ -153,11 +156,11 @@ socket.on('setup:clue-giver-set', ({ team, clueGiverId }) => {
   }
 });
 
-socket.on('setup:taboo-updated', ({ forTeam, words }) => {
+socket.on('setup:taboo-updated', ({ words }) => {
   useGameStore.setState({ tabooSuggestions: words });
 });
 
-socket.on('setup:cards-updated', ({ forTeam, cards }) => {
+socket.on('setup:cards-updated', ({ cards }) => {
   useGameStore.setState({ challengeCards: cards });
 });
 
