@@ -284,5 +284,81 @@ describe('Room', () => {
       expect(room.game).toBeNull();
       expect(room.roundHistory).toHaveLength(0);
     });
+
+    it('purges soft-removed players', () => {
+      room.startGame();
+      room.removePlayer('p4');
+      expect(room.getPlayer('p4')?.removed).toBe(true);
+      room.game!.phase = GamePhase.GAME_OVER;
+      room.resetToLobby();
+      expect(room.getPlayer('p4')).toBeUndefined();
+      expect(room.players.size).toBe(3);
+    });
+  });
+
+  describe('soft-remove during active game', () => {
+    it('soft-removes player during active game', () => {
+      room.startGame();
+      room.removePlayer('p4');
+      // Player still in map but marked removed
+      expect(room.players.size).toBe(4);
+      expect(room.getPlayer('p4')?.removed).toBe(true);
+      expect(room.getPlayer('p4')?.connected).toBe(false);
+    });
+
+    it('hard-deletes player when no game is active', () => {
+      room.removePlayer('p4');
+      expect(room.players.size).toBe(3);
+      expect(room.getPlayer('p4')).toBeUndefined();
+    });
+
+    it('hard-deletes player in LOBBY phase', () => {
+      room.startGame();
+      room.game!.phase = GamePhase.LOBBY;
+      room.removePlayer('p4');
+      expect(room.getPlayer('p4')).toBeUndefined();
+    });
+
+    it('hard-deletes player in GAME_OVER phase', () => {
+      room.startGame();
+      room.game!.phase = GamePhase.GAME_OVER;
+      room.removePlayer('p4');
+      expect(room.getPlayer('p4')).toBeUndefined();
+    });
+
+    it('getPlayerByName finds soft-removed players', () => {
+      room.startGame();
+      room.removePlayer('p4');
+      expect(room.getPlayerByName('Player4')?.removed).toBe(true);
+    });
+
+    it('getTeamPlayers excludes soft-removed players', () => {
+      room.startGame();
+      expect(room.getTeamPlayers('B')).toHaveLength(2);
+      room.removePlayer('p4');
+      expect(room.getTeamPlayers('B')).toHaveLength(1);
+    });
+
+    it('getActivePlayers excludes soft-removed players', () => {
+      room.startGame();
+      expect(room.getActivePlayers()).toHaveLength(4);
+      room.removePlayer('p4');
+      expect(room.getActivePlayers()).toHaveLength(3);
+    });
+
+    it('clears taboo master on soft-remove', () => {
+      room.startGame();
+      room.removePlayer('p3'); // p3 is TM for team B
+      expect(room.tabooMasters.B).toBeNull();
+    });
+
+    it('serializes and restores removed flag', () => {
+      room.startGame();
+      room.removePlayer('p4');
+      const json = room.toJSON();
+      const restored = Room.fromJSON(json);
+      expect(restored.getPlayer('p4')?.removed).toBe(true);
+      expect(restored.getPlayerByName('Player4')?.removed).toBe(true);
+    });
   });
 });

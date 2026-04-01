@@ -42,6 +42,7 @@ export function registerLobbyHandlers(ctx: SocketContext) {
         existing.connected = true;
         existing.socketId = socket.id;
         existing.disconnectedAt = undefined;
+        existing.removed = false;
       }
       ctx.setPlayerId(existing.id);
       rooms.trackPlayer(existing.id, room.code);

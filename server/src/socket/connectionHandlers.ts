@@ -89,14 +89,18 @@ function handleLeave(ctx: SocketContext) {
   if (player?.team) socket.leave(`${room.code}:team${player.team}`);
   socket.leave(room.code);
   room.removePlayer(playerId);
-  rooms.untrackPlayer(playerId);
+  const softRemoved = !!room.getPlayer(playerId);
+  if (!softRemoved) {
+    rooms.untrackPlayer(playerId);
+  }
 
-  if (room.players.size === 0) {
+  const activePlayers = room.getActivePlayers();
+  if (activePlayers.length === 0) {
     rooms.deleteRoom(room.code);
     logger.info('room', 'Room deleted (empty)', { room: room.code });
-  } else {
+  } else if (!softRemoved) {
     if (room.hostId === playerId) {
-      const nextHost = Array.from(room.players.values()).find(p => p.connected);
+      const nextHost = activePlayers.find(p => p.connected);
       if (nextHost) room.hostId = nextHost.id;
     }
     io.to(room.code).emit('room:player-left', {

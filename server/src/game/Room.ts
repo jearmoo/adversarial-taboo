@@ -41,10 +41,24 @@ export class Room {
   }
 
   removePlayer(id: string): void {
-    this.players.delete(id);
+    const player = this.players.get(id);
+    const gameActive = this.game
+      && this.game.phase !== GamePhase.LOBBY
+      && this.game.phase !== GamePhase.GAME_OVER;
+    if (player && gameActive) {
+      // Soft-remove: keep in map so they can rejoin by name mid-game
+      player.connected = false;
+      player.removed = true;
+    } else {
+      this.players.delete(id);
+    }
     if (this.tabooMasters.A === id) this.tabooMasters.A = null;
     if (this.tabooMasters.B === id) this.tabooMasters.B = null;
     this.touch();
+  }
+
+  getActivePlayers(): Player[] {
+    return Array.from(this.players.values()).filter(p => !p.removed);
   }
 
   getPlayer(id: string): Player | undefined { return this.players.get(id); }
@@ -379,6 +393,10 @@ export class Room {
   }
 
   resetToLobby(): void {
+    // Purge soft-removed players before returning to lobby
+    for (const [id, player] of this.players) {
+      if (player.removed) this.players.delete(id);
+    }
     this.game = null;
     this.clearTimer();
     this.roundHistory = [];
@@ -408,7 +426,7 @@ export class Room {
       tabooMasters: this.tabooMasters,
       players: Array.from(this.players.values()).map(p => ({
         id: p.id, name: p.name, team: p.team,
-        connected: p.connected, disconnectedAt: p.disconnectedAt,
+        connected: p.connected, disconnectedAt: p.disconnectedAt, removed: p.removed,
       })),
       game: this.game,
       roundHistory: this.roundHistory,
@@ -431,6 +449,7 @@ export class Room {
         socketId: '',
         connected: false,
         disconnectedAt: Date.now(),
+        removed: p.removed ?? false,
       });
     }
 

@@ -5,6 +5,7 @@ export interface Player {
   socketId: string;
   connected: boolean;
   disconnectedAt?: number;
+  removed?: boolean;
 }
 
 export type TeamId = 'A' | 'B';
