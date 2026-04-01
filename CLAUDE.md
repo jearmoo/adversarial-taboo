@@ -1,96 +1,56 @@
-# Adversarial Taboo
+# CLAUDE.md
 
-Real-time multiplayer party game. Two teams compete: opposing Taboo Masters set forbidden words, then clue-givers describe words without using them.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Stack
-
-- **Server**: Node.js + Express + Socket.IO + TypeScript (`server/src/`)
-- **Client**: React 18 + Vite + Zustand + Tailwind CSS (`client/src/`)
-- **Deploy**: Docker on port 4040
-
-## Development
+## Commands
 
 ```bash
-npm run dev          # runs both client (:5173) and server (:4040)
-npm test             # run server unit tests (Vitest)
-npm run lint         # ESLint across client + server
-npm run typecheck    # TypeScript checking for both
-npm run format       # Prettier auto-format
+npm run dev              # Run server (:4040) + client (:5173) concurrently
+npm run dev:server       # Server only (tsx watch)
+npm run dev:client       # Client only (Vite)
+npm run build            # Build both client + server
+npm start                # Run production server
+npm test                 # Server unit tests (Vitest, runs in server/)
+npm run lint             # ESLint across client + server
+npm run typecheck        # tsc --noEmit in both client + server
+npm run format           # Prettier auto-format
+npm run format:check     # Check formatting without writing
 ```
 
-Docker build to verify everything compiles:
-```bash
-docker compose up -d --build
-```
-
-### Testing
-- Framework: Vitest (server-side only)
-- Test files: `server/src/game/Room.test.ts`, `server/src/game/RoomManager.test.ts`
-- Coverage: Room state machine, player management, game flow, scoring, serialization, persistence
-
-### CI
-- GitHub Actions (`.github/workflows/ci.yml`): lint, typecheck, test, Docker build on every push/PR
+Run a single test file: `cd server && npx vitest run src/game/Room.test.ts`
 
 ## Architecture
 
-### Game Phases
-`LOBBY` → `PARALLEL_SETUP` → `CLUING_A` → `CLUING_B` → `ROUND_RESULT` → (repeat or `GAME_OVER`)
+Real-time multiplayer party game (Adversarial Taboo). Two-package structure: `client/` (React SPA) and `server/` (Node.js + Socket.IO).
 
-### Data Model
-- `Room` class holds all state: players, settings, game, round history
-- `challenges[X]` = challenge FOR team X (created BY opposing TM)
-- `challenges[X].clueGiverId` = team X's clue-giver
-- `setupStatus[X]` = readiness of challenge FOR team X
-- State persisted to `/data/rooms.json` — snapshots every 60s, on graceful shutdown, and on unhandled exceptions; atomic writes via temp file + rename; fallback to `.tmp` if primary is corrupt
-- On restart, rooms restore with players marked disconnected; clients auto-reconnect via Socket.IO
+### Server (`server/src/`)
 
-### Key Patterns
-- **Role-based emissions**: server sends different data to clue-giver vs guessers vs opposing team (word masking)
-- **Immediate reassignment**: both TM and host are reassigned instantly on disconnect (120s grace period for full removal)
-- **Round archiving**: `Room.archiveCurrentRound()` snapshots challenge data after CLUING_B before it's wiped by `advanceToNextRound()`
-- **Host-gated actions**: `game:start`, `round:next`, `game:play-again` require `room.hostId === playerId`
+- **`game/Room.ts`** — Core state machine. Manages game phases: LOBBY → PARALLEL_SETUP → CLUING_A → CLUING_B → ROUND_RESULT → GAME_OVER. Contains all game logic (scoring, turn management, round archiving). This is the single source of truth for game state.
+- **`game/RoomManager.ts`** — Room lifecycle: creation, lookup, cleanup (30min inactive timeout), JSON persistence to `/data/rooms.json` with atomic writes and crash recovery.
+- **`socket/`** — Handler modules split by concern: `lobbyHandlers.ts`, `setupHandlers.ts`, `gameHandlers.ts`, `connectionHandlers.ts`. All receive a `SocketContext` (dependency injection of io, socket, rooms, playerId).
+- **`socket/handlers.ts`** — Orchestrator that registers all handler modules on socket connection.
+- **`words/`** — Pluggable `WordProvider` interface. Active provider fetches from randomwordgenerator.com with a fallback word list.
 
-### Socket Events (key ones)
-- `setup:confirm` / `setup:unconfirm` — TM locks/unlocks their challenge
-- `clue:begin` — clue-giver starts timer
-- `clue:end-turn` — clue-giver ends early (unresolved cards = missed)
-- `round:ended` — includes `roundHistory` for the history panel
-- `room:host-updated` — immediate host reassignment on disconnect
+### Client (`client/src/`)
 
-### Metrics (`server/src/metrics.ts`)
-- **Counters** (persisted to `/data/metrics.json`, flushed every 60s):
-  - `roomsCreated` — on `room:create`
-  - `playersJoined` — on `room:create` (host) + `room:join` (new players, not reconnects)
-  - `gamesStarted` — on `game:start`
-  - `gamesCompleted` — when final round's team B cluing ends (`GAME_OVER`)
-- **Gauges** (computed live at query time):
-  - `connections` — `io.engine.clientsCount` (raw WebSocket connections)
-  - `activePlayers` — `playerToRoom.size` (includes disconnected players in 120s grace window)
-  - `activeRooms` — `rooms.size`
-- **API**: `GET /api/metrics?days=N` — requires `Authorization: Bearer <token>`
-- Daily buckets pruned to 30 days on each flush
-- Deep merge on load so new counter fields get defaults from older persisted data
-- `METRICS_TOKEN` env var required for API auth
+- **`store.ts`** — Zustand store holding all game state. Exposes computed hooks (`useMyRole`, `useMyTeam`) as selectors.
+- **`socketListeners.ts`** — All Socket.IO event handlers that dispatch to the Zustand store.
+- **`socket.ts`** — Socket.IO client instance with auto-reconnect and session restore from localStorage.
+- **`App.tsx`** — Phase-based screen router. Renders the appropriate component based on `phase` from the store.
+- **`components/`** — One component per game screen/phase. Use Tailwind CSS + Framer Motion for styling/animation.
 
-### Google Analytics
-- Optional: set `GA_MEASUREMENT_ID` in `.env` (injected at build time via `VITE_GA_ID`)
-- Custom dimension `game_name: 'adversarial-taboo'` sent with all events
-- Self-disables if ID is absent
+### Key patterns
 
-### Code Quality
-- **ESLint**: flat config (`eslint.config.js`) with TypeScript ESLint — warns on unused vars, explicit `any`, `console.log`
-- **Prettier**: single quotes, trailing commas, 120 print width (`.prettierrc`)
-- **Shared constants**: `client/src/constants.ts` (e.g., `SESSION_KEY`)
+- **Adding a socket event**: Define handler in the appropriate `socket/*.ts` module → register in `handlers.ts` → add listener in `socketListeners.ts` → update Zustand store → consume in component.
+- **Session persistence**: Client stores `{ roomCode, playerId, playerName }` in localStorage under `adtaboo_session`. On reconnect, state is restored within a 120-second grace period.
+- **Room serialization**: `Room.toDTO()` produces the client-facing shape. `buildGameState(room)` extracts active game data for socket emission.
+- **Scoring**: +3 correct, -1 buzz, 0 missed.
+- **Room codes**: 4-char alphanumeric, excluding ambiguous characters (0/O/1/I/L).
 
-## Style Guide
+## Code Style
 
-- Dark glassmorphism theme: `glass-card`, team colors (blue A / red B), accent amber
-- `font-display` (Righteous) for headings, DM Sans for body
-- Tailwind + custom CSS classes in `index.css` (`btn-primary`, `btn-success`, `btn-team-a`, `btn-team-b`, `buzz-btn`, `game-input`)
-- Mobile-first — this is a phone party game
-
-## Gotchas
-
-- `confirmChallenge(forTeam)` validates the challenge FOR the opposing team — don't add own-team checks there (own-team CG is validated in the handler)
-- When writing JSX via Python/SSH scripts, `\uXXXX` in JS string literals (`{'...\u2713...'}`) works, but in JSX template text it renders as literal text — use HTML entities (`&times;`) or JS expressions instead
-- `setupStatus[myTeam]` = challenge created BY the other team FOR me; `setupStatus[opposingTeam]` = challenge I'm creating FOR them
+- TypeScript strict mode in both packages
+- Prettier: single quotes, trailing commas, 120 char width, 2 spaces
+- ESLint: unused vars warn (allow `_` prefix), `any` warn
+- Components: PascalCase, default exports
+- Team IDs: literal `'A' | 'B'`
