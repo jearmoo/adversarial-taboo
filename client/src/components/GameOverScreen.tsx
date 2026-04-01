@@ -115,6 +115,7 @@ export default function GameOverScreen() {
             socket.emit('room:leave');
             useGameStore.getState().reset();
             localStorage.removeItem(SESSION_KEY);
+            window.history.replaceState(null, '', '/');
           }}
           className="w-full py-3 text-gray-500 hover:text-white transition-colors text-sm"
         >

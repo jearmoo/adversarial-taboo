@@ -1,4 +1,4 @@
-import { socket } from './socket';
+import { socket, autoReconnecting, clearAutoReconnecting } from './socket';
 import { useGameStore, initialState, SESSION_KEY } from './store';
 
 function saveSession() {
@@ -34,6 +34,7 @@ socket.on('room:joined', ({ roomCode, playerId, room }) => {
 });
 
 socket.on('room:rejoined', ({ roomCode, playerId, room, game }) => {
+  clearAutoReconnecting();
   const update: Record<string, unknown> = {
     roomCode, playerId, hostId: room.hostId,
     players: room.players, settings: room.settings,
@@ -124,6 +125,13 @@ socket.on('team:updated', ({ players }) => { useGameStore.setState({ players });
 socket.on('settings:updated', ({ settings }) => { useGameStore.setState({ settings }); });
 socket.on('taboo-master:updated', ({ tabooMasters }) => { useGameStore.setState({ tabooMasters }); });
 socket.on('room:error', ({ message }) => {
+  if (autoReconnecting) {
+    clearAutoReconnecting();
+    if (message === 'Room not found') {
+      localStorage.removeItem(SESSION_KEY);
+      return;
+    }
+  }
   console.error('Room error:', message);
   useGameStore.getState().setError(message);
 });

@@ -8,6 +8,10 @@ export const socket: Socket = io(URL, {
   autoConnect: true,
 });
 
+// Flag to distinguish auto-reconnect attempts from manual joins
+export let autoReconnecting = false;
+export function clearAutoReconnecting() { autoReconnecting = false; }
+
 // Auto-reconnect from saved session (skip if URL has a room code)
 socket.on('connect', () => {
   const urlPath = window.location.pathname.replace(/^\//, '');
@@ -18,6 +22,7 @@ socket.on('connect', () => {
     try {
       const { roomCode, playerId, playerName } = JSON.parse(saved);
       if (roomCode && playerId && playerName) {
+        autoReconnecting = true;
         socket.emit('room:join', { roomCode, playerName, sessionId: playerId });
       }
     } catch (_e) { /* corrupt session data */ }
